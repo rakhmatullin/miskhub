@@ -1,25 +1,23 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Сверка весов — MiskHub</title>
-<style>
-body{font-family:system-ui;background:#070b14;color:#e2e8f0;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.box{max-width:420px;padding:28px;border:1px solid rgba(56,189,248,.25);border-radius:16px;background:#0f172a;text-align:center}
-h1{font-size:1.25rem;margin:0 0 12px;background:linear-gradient(120deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-p{color:#94a3b8;font-size:14px;line-height:1.5}
-a{color:#38bdf8}
-a.btn{display:inline-block;margin-top:12px;padding:10px 18px;border-radius:10px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;text-decoration:none;font-weight:600}
-</style>
-</head>
-<body>
-<div class="box">
-<h1>Сверка весов</h1>
-<p>Полный файл ещё не залит в репозиторий.</p>
-<p>Скачай рабочую версию с Google Drive и залей в корень репо как <code>sverka-vesov.html</code>.</p>
-<p><a class="btn" href="https://drive.google.com/file/d/1tPS_Ksbs2GlIteAfuK89uRUXk5yMgVXB/view">Скачать sverka-vesov.html</a></p>
-<p style="margin-top:16px"><a href="./">← Назад в MiskHub</a></p>
-</div>
-</body>
-</html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Сверка весов</title>
+<style>body{margin:0;background:#070b14;color:#94a3b8;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh}</style>
+</head><body><p id="s">Загрузка Сверка весов…</p>
+<script>
+(async()=>{
+  try {
+    let b64='';
+    for(let i=0;i<3;i++){
+      const r=await fetch('./data/sverka-'+i+'.txt');
+      if(!r.ok) throw new Error('chunk '+i+': '+r.status);
+      b64+=await r.text();
+    }
+    const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+    const ds=new DecompressionStream('gzip');
+    const stream=new Blob([bin]).stream().pipeThrough(ds);
+    const html=await new Response(stream).text();
+    document.open();document.write(html);document.close();
+  } catch(e) {
+    document.getElementById('s').innerHTML='Ошибка загрузки: '+e+'<br><small>Обновите страницу или откройте в Chrome/Firefox</small>';
+  }
+})();
+</script></body></html>
