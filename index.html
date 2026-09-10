@@ -1,20 +1,23 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>MiskHub</title></head>
-<body>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MiskHub</title>
+<style>body{margin:0;background:#070b14;color:#94a3b8;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh}</style>
+</head><body><p id="s">Загрузка MiskHub…</p>
 <script>
-(async () => {
-  const n = 4;
-  let html = '';
-  for (let i = 0; i < n; i++) {
-    const r = await fetch('./parts/index-' + i + '.txt');
-    html += await r.text();
+(async()=>{
+  try {
+    let b64='';
+    for(let i=0;i<3;i++){
+      const r=await fetch('./data/index-'+i+'.txt');
+      if(!r.ok) throw new Error('chunk '+i+': '+r.status);
+      b64+=await r.text();
+    }
+    const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+    const ds=new DecompressionStream('gzip');
+    const stream=new Blob([bin]).stream().pipeThrough(ds);
+    const html=await new Response(stream).text();
+    document.open();document.write(html);document.close();
+  } catch(e) {
+    document.getElementById('s').innerHTML='Ошибка загрузки: '+e+'<br><small>Обновите страницу или откройте в Chrome/Firefox</small>';
   }
-  document.open();
-  document.write(html);
-  document.close();
-})().catch(e => {
-  document.body.innerHTML = '<pre style="color:#f87171;padding:20px">Load error: ' + e + '</pre>';
-});
-</script>
-<p style="font-family:system-ui;color:#94a3b8;padding:20px">Загрузка MiskHub…</p>
-</body></html>
+})();
+</script></body></html>
