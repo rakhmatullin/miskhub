@@ -18,7 +18,11 @@
     </style>
     <script>
       (function () {
-        var map = { ustranenie: "ustranenie.html", "sverka-vesov": "sverka-vesov.html" };
+        var map = {
+          ustranenie: "ustranenie.html",
+          "sverka-vesov": "sverka-vesov.html",
+          akty: "akty.html"
+        };
         var parts = location.pathname.replace(/\/+$/, "").split("/");
         var last = parts[parts.length - 1] || "";
         if (last && last !== "miskhub" && map[last]) {

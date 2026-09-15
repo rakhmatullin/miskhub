@@ -11,8 +11,35 @@
     <link rel="modulepreload" crossorigin href="/miskhub/assets/app-spxHeBi4.js">
     <link rel="modulepreload" crossorigin href="/miskhub/assets/preload-helper-8vhTeOtO.js">
     <link rel="stylesheet" crossorigin href="/miskhub/assets/app-DuK--N2i.css">
+    <style>
+      .mh-jump {
+        position: fixed;
+        top: 12px;
+        right: 16px;
+        z-index: 80;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        pointer-events: auto;
+      }
+      .mh-jump a {
+        background: #1c4d86;
+        color: #e8eefc;
+        text-decoration: none;
+        font: 600 12px/1 system-ui, sans-serif;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid #2b6cb0;
+      }
+      .mh-jump a:hover { filter: brightness(1.08); }
+    </style>
   </head>
   <body>
+    <nav class="mh-jump">
+      <a href="/miskhub/akty.html">Акты об устранении</a>
+      <a href="/miskhub/ustranenie.html">Устранение</a>
+      <a href="/miskhub/sverka-vesov.html">Сверка весов</a>
+    </nav>
     <div id="root"></div>
   </body>
 </html>
