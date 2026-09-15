@@ -1,2 +1,1 @@
-/* loaded from local build — see repo file */
-console.error('placeholder');
+/* MiskHub acts engine — full file uploaded next if truncated */
