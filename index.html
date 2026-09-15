@@ -16,9 +16,9 @@
     <div id="root"></div>
     <script>
       (function () {
-        function inject() {
+        function injectNav() {
           var header = document.querySelector("header");
-          if (!header || header.querySelector("[data-akty]")) return !!header && !!header.querySelector("[data-akty]");
+          if (!header || header.querySelector("[data-akty]")) return !!(header && header.querySelector("[data-akty]"));
           var links = header.querySelectorAll("a");
           if (!links.length) return false;
           var a = document.createElement("a");
@@ -26,12 +26,36 @@
           a.href = "/miskhub/akty.html";
           a.textContent = "Акты об устранении";
           a.className = links[links.length - 1].className;
-          links[1] ? links[1].after(a) : links[0].after(a);
+          (links[1] || links[0]).after(a);
           return true;
+        }
+        function injectCard() {
+          var titles = document.querySelectorAll("h2");
+          for (var i = 0; i < titles.length; i++) {
+            var h = titles[i];
+            var name = (h.textContent || "").toLowerCase();
+            if (name.indexOf("акт") === -1) continue;
+            var card = h.parentElement;
+            if (!card || card.querySelector("[data-akty-open]")) continue;
+            var dead = null;
+            var nodes = card.querySelectorAll("div");
+            for (var j = 0; j < nodes.length; j++) {
+              if ((nodes[j].textContent || "").indexOf("графе знаний") !== -1) dead = nodes[j];
+            }
+            var btn = document.createElement("a");
+            btn.setAttribute("data-akty-open", "1");
+            btn.href = "/miskhub/akty.html";
+            btn.textContent = "Открыть инструмент";
+            btn.style.cssText = "display:flex;align-items:center;justify-content:center;margin-top:16px;height:40px;width:100%;border-radius:8px;background:#7dd3fc;color:#070b14;font:600 14px/1 system-ui,sans-serif;text-decoration:none";
+            if (dead) dead.replaceWith(btn);
+            else card.appendChild(btn);
+          }
         }
         var n = 0;
         var t = setInterval(function () {
-          if (inject() || ++n > 50) clearInterval(t);
+          injectNav();
+          injectCard();
+          if (++n > 80) clearInterval(t);
         }, 80);
       })();
     </script>
