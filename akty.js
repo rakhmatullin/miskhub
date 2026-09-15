@@ -1,1 +1,2 @@
-/* MiskHub acts engine — full file uploaded next if truncated */
+/* MiskHub acts: open https://rakhmatullin.github.io/miskhub/akty.html */
+console.warn('engine stub');
