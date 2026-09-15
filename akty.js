@@ -1,4 +1,2 @@
-/* MiskHub acts engine */
-(function(){
-const T=["{{NOMER}}"]
-})();
+/* see artifacts copy; engine will be patched */
+console.error('replace me');
