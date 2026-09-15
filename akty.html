@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Акты об устранении — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="stylesheet" href="./akty.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html">MiskHub</a>
+    <nav>
+      <a href="./index.html">Граф</a>
+      <a href="./ustranenie.html">Устранение</a>
+      <a class="on" href="./akty.html">Акты</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">Инструмент без ИИ · шаблон + выгрузка</p>
+      <h1>Акты об устранении</h1>
+      <p class="lead">
+        Загрузи выгрузку — сервис оставит только «К устранению», подставит поля в шаблон
+        и соберёт пакет актов. Фото хранятся отдельно: <code>N_1</code> до, <code>N_2</code> после.
+        В Word они не вставляются.
+      </p>
+    </section>
+    <section class="grid-3">
+      <label class="drop" id="dropDump">
+        <input type="file" id="fileDump" accept=".xlsx,.xls,.csv" hidden />
+        <span class="tag">1</span>
+        <strong>Выгрузка Excel</strong>
+        <em id="dumpName">xlsx с колонкой Статус</em>
+      </label>
+      <label class="drop" id="dropTpl">
+        <input type="file" id="fileTpl" accept=".docx" hidden />
+        <span class="tag">2</span>
+        <strong>Шаблон Word</strong>
+        <em id="tplName">встроенный, можно заменить</em>
+      </label>
+      <div class="drop static">
+        <span class="tag">3</span>
+        <strong>Дата акта</strong>
+        <input type="date" id="actDate" />
+        <em>не путать с датой предписания</em>
+      </div>
+    </section>
+    <section class="stats" id="stats" hidden>
+      <div><b id="nOpen">0</b><span>к устранению</span></div>
+      <div><b id="nClosed">0</b><span>закрыто</span></div>
+      <div><b id="nDeleted">0</b><span>удалено</span></div>
+      <div><b id="nPhoto1">0</b><span>фото до</span></div>
+      <div><b id="nPhoto2">0</b><span>фото после</span></div>
+    </section>
+    <section class="toolbar" id="toolbar" hidden>
+      <input type="search" id="q" placeholder="поиск по номеру или описанию" />
+      <button type="button" id="btnXlsx">Скачать список.xlsx</button>
+      <button type="button" id="btnActs">Скачать акты.docx</button>
+      <button type="button" class="primary" id="btnPack">Скачать пакет: акты + фото + список</button>
+    </section>
+    <section class="tokens">
+      <details>
+        <summary>Токены шаблона — что подменяется из выгрузки</summary>
+        <div class="token-grid" id="tokenList"></div>
+      </details>
+    </section>
+    <section id="tableWrap"></section>
+  </main>
+  <footer>
+    <span>Данные живут в этом браузере (IndexedDB). Никуда не улетают.</span>
+    <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
+  </footer>
+  <script src="./akty.js"></script>
+</body>
+</html>
