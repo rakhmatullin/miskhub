@@ -24,55 +24,33 @@
     <section class="hero">
       <p class="kicker">Инструмент без ИИ · шаблон + выгрузка</p>
       <h1>Акты об устранении</h1>
-      <p class="lead">
-        Статус читается только из колонки «Статус». Дата акта и дата предписания — разные поля.
-        Фото: <code>N_1</code> до, <code>N_2</code> после. В Word на этой странице не вставляются.
-      </p>
+      <p class="lead">Статус только из колонки «Статус». Дата акта ≠ дата предписания. Фото <code>N_1</code> / <code>N_2</code>.</p>
     </section>
-
     <section class="tape-wrap">
       <div class="tape-head">
-        <div>
-          <span class="kicker">Лента срезов</span>
-          <strong>Открытые · закрытые · дата акта</strong>
-        </div>
-        <div class="act-pill">
-          дата акта
-          <b id="actDateLabel">—</b>
-        </div>
+        <div><span class="kicker">Лента срезов</span><strong>Открытые · закрытые · дата акта</strong></div>
+        <div class="act-pill">дата акта <b id="actDateLabel">—</b></div>
       </div>
-      <div class="tape" id="tape">
-        <div class="tape-empty">Загрузи выгрузку — здесь появятся дни срезов</div>
-      </div>
-      <p class="tape-legend">
-        <i class="sq red"></i> открыто
-        <i class="sq green"></i> закрыто
-        <i class="sq gray"></i> удалено
-        <i class="sq mid"></i> этот срез
-      </p>
+      <div class="tape" id="tape"><div class="tape-empty">Загрузи выгрузку — здесь появятся дни срезов</div></div>
+      <p class="tape-legend"><i class="sq red"></i> открыто <i class="sq green"></i> закрыто <i class="sq gray"></i> удалено <i class="sq mid"></i> этот срез</p>
     </section>
-
+    <section class="cloud-bar">
+      <div>
+        <span class="kicker">Облако Google Drive</span>
+        <strong id="cloudStatus">не подключено — на другом устройстве будет пусто, пока не войдёшь</strong>
+      </div>
+      <div class="cloud-actions">
+        <button type="button" id="btnCloudIn">Войти в Google</button>
+        <button type="button" id="btnCloudPull">Забрать из облака</button>
+        <button type="button" id="btnCloudPush">Сохранить в облако</button>
+        <a class="btn-file" href="https://drive.google.com/drive/folders/1RUbdFYVPoqhdFWtUpmIEzUXq9NaHpr4z" target="_blank" rel="noopener">Папка Drive</a>
+      </div>
+    </section>
     <section class="grid-3">
-      <label class="drop" id="dropDump">
-        <input type="file" id="fileDump" accept=".xlsx,.xls,.csv" hidden />
-        <span class="tag">1</span>
-        <strong>Выгрузка Excel</strong>
-        <em id="dumpName">xlsx с колонкой Статус</em>
-      </label>
-      <label class="drop" id="dropTpl">
-        <input type="file" id="fileTpl" accept=".docx" hidden />
-        <span class="tag">2</span>
-        <strong>Шаблон Word</strong>
-        <em id="tplName">загружается встроенный</em>
-      </label>
-      <div class="drop static">
-        <span class="tag">3</span>
-        <strong>Дата акта</strong>
-        <input type="date" id="actDate" />
-        <em>не путать с датой предписания</em>
-      </div>
+      <label class="drop" id="dropDump"><input type="file" id="fileDump" accept=".xlsx,.xls,.csv" hidden /><span class="tag">1</span><strong>Выгрузка Excel</strong><em id="dumpName">xlsx с колонкой Статус</em></label>
+      <label class="drop" id="dropTpl"><input type="file" id="fileTpl" accept=".docx" hidden /><span class="tag">2</span><strong>Шаблон Word</strong><em id="tplName">загружается встроенный</em></label>
+      <div class="drop static"><span class="tag">3</span><strong>Дата акта</strong><input type="date" id="actDate" /><em>не путать с датой предписания</em></div>
     </section>
-
     <section class="stats" id="stats" hidden>
       <div><b id="nOpen">0</b><span>к устранению</span></div>
       <div><b id="nClosed">0</b><span>закрыто</span></div>
@@ -80,28 +58,19 @@
       <div><b id="nPhoto1">0</b><span>фото до</span></div>
       <div><b id="nPhoto2">0</b><span>фото после</span></div>
     </section>
-
     <section class="toolbar" id="toolbar" hidden>
       <input type="search" id="q" placeholder="поиск по номеру или описанию" />
       <button type="button" id="btnXlsx">Список.xlsx</button>
       <button type="button" id="btnActs">Акты.docx</button>
       <button type="button" class="primary" id="btnPack">Пакет: акты + фото + список</button>
       <button type="button" id="btnProject">Скачать проект</button>
-      <label class="btn-file">Восстановить проект
-        <input type="file" id="fileProject" accept=".zip,.json" hidden />
-      </label>
+      <label class="btn-file">Восстановить проект<input type="file" id="fileProject" accept=".zip,.json" hidden /></label>
     </section>
-
-    <section class="tokens">
-      <details>
-        <summary>Токены шаблона</summary>
-        <div class="token-grid" id="tokenList"></div>
-      </details>
-    </section>
+    <section class="tokens"><details><summary>Токены шаблона</summary><div class="token-grid" id="tokenList"></div></details></section>
     <section id="tableWrap"></section>
   </main>
   <footer>
-    <span>Выгрузка и фото хранятся в браузере и в скачиваемом проекте. Новая выгрузка не затирает фото живых актов и удаляет фото тех, кого уже нет в «К устранению».</span>
+    <span>Канон проекта — папка Google Drive. Браузер только кэш. Войди в Google на каждом устройстве один раз.</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
   <script src="./akty.js"></script>
