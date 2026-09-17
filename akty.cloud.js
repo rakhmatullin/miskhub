@@ -1,8 +1,5 @@
-/* Общий проект без входа: файл на GitHub Pages. */
+/* Общий проект без входа */
 (function () {
-  const PROJECT_URL = "./cloud/project.json";
-  const FOTO_BASE = "./cloud/foto/";
-  const FLAG = "miskhub.cloud.applied";
   const $ = (id) => document.getElementById(id);
   function status(t) { if ($("cloudStatus")) $("cloudStatus").textContent = t; }
   function openDb() {
@@ -18,50 +15,45 @@
       req.onerror = () => reject(req.error);
     });
   }
-  function idbGet(store, key) {
-    return openDb().then((db) => new Promise((res, rej) => {
-      const rq = db.transaction(store, "readonly").objectStore(store).get(key);
-      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
-    }));
-  }
   function idbPut(store, key, val) {
     return openDb().then((db) => new Promise((res, rej) => {
       const tx = db.transaction(store, "readwrite"); tx.objectStore(store).put(val, key);
       tx.oncomplete = res; tx.onerror = () => rej(tx.error);
     }));
   }
-  async function pull() {
-    status("читаю общий проект…");
-    const r = await fetch(PROJECT_URL + "?t=" + Date.now(), { cache: "no-store" });
-    if (!r.ok) throw new Error("нет cloud/project.json");
+  async function loadProject() {
+    const r = await fetch("./cloud/project.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("no project");
     const data = await r.json();
-    const local = (await idbGet("meta", "state")) || {};
-    const remoteAt = Date.parse(data.updatedAt || 0) || 0;
-    const localAt = Date.parse(local.updatedAt || 0) || 0;
-    const localEmpty = !local.rows || !local.rows.length;
-    if (data.rows && data.rows.length && (localEmpty || remoteAt >= localAt)) {
-      await idbPut("meta", "state", { rows: data.rows || [], dumpName: data.dumpName || "", actDate: data.actDate || "", updatedAt: data.updatedAt || new Date().toISOString() });
+    let rows = Array.isArray(data.rows) ? data.rows.slice() : [];
+    for (const f of (data.rowFiles || [])) {
+      const p = await fetch("./cloud/" + f + "?t=" + Date.now(), { cache: "no-store" });
+      if (p.ok) rows = rows.concat(await p.json());
     }
-    for (const name of (data.photoFiles || [])) {
-      const m = String(name).match(/^(\d+)_([12])\./i);
-      if (!m) continue;
-      try {
-        const img = await fetch(FOTO_BASE + name + "?t=" + Date.now(), { cache: "no-store" });
-        if (!img.ok) continue;
-        await idbPut("photos", m[1] + "_" + m[2], { blob: await img.blob(), name: name });
-      } catch (e) { console.warn(name, e); }
-    }
+    data.rows = rows;
     return data;
   }
   async function start() {
+    status("читаю общий проект…");
     try {
-      const data = await pull();
-      status("общий проект · вход не нужен · строк " + ((data.rows || []).length));
-      if (!sessionStorage.getItem(FLAG)) { sessionStorage.setItem(FLAG, "1"); location.reload(); }
-    } catch (e) { console.warn(e); status("общий файл пока пуст"); }
+      const data = await loadProject();
+      if (data.rows && data.rows.length) {
+        await idbPut("meta", "state", { rows: data.rows, dumpName: data.dumpName || "", actDate: data.actDate || "", updatedAt: data.updatedAt });
+      }
+      status("общий проект · вход не нужен · строк " + (data.rows || []).length);
+      if (!sessionStorage.getItem("miskhub.cloud.applied")) {
+        sessionStorage.setItem("miskhub.cloud.applied", "1");
+        location.reload();
+      }
+    } catch (e) {
+      console.warn(e);
+      status("общий файл не прочитался");
+    }
   }
   function bind() {
-    if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () { sessionStorage.removeItem(FLAG); start(); });
+    if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () {
+      sessionStorage.removeItem("miskhub.cloud.applied"); start();
+    });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { bind(); start(); });
   else { bind(); start(); }
