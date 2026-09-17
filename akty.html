@@ -36,14 +36,11 @@
     </section>
     <section class="cloud-bar">
       <div>
-        <span class="kicker">Облако Google Drive</span>
-        <strong id="cloudStatus">не подключено — на другом устройстве будет пусто, пока не войдёшь</strong>
+        <span class="kicker">Общий проект</span>
+        <strong id="cloudStatus">загружаю с сайта…</strong>
       </div>
       <div class="cloud-actions">
-        <button type="button" id="btnCloudIn">Войти в Google</button>
-        <button type="button" id="btnCloudPull">Забрать из облака</button>
-        <button type="button" id="btnCloudPush">Сохранить в облако</button>
-        <a class="btn-file" href="https://drive.google.com/drive/folders/1RUbdFYVPoqhdFWtUpmIEzUXq9NaHpr4z" target="_blank" rel="noopener">Папка Drive</a>
+        <button type="button" id="btnCloudPull">Обновить с сайта</button>
       </div>
     </section>
     <section class="grid-3">
@@ -63,14 +60,14 @@
       <button type="button" id="btnXlsx">Список.xlsx</button>
       <button type="button" id="btnActs">Акты.docx</button>
       <button type="button" class="primary" id="btnPack">Пакет: акты + фото + список</button>
-      <button type="button" id="btnProject">Скачать проект</button>
+      <button type="button" id="btnProject">Скачать прроект</button>
       <label class="btn-file">Восстановить проект<input type="file" id="fileProject" accept=".zip,.json" hidden /></label>
     </section>
     <section class="tokens"><details><summary>Токены шаблона</summary><div class="token-grid" id="tokenList"></div></details></section>
     <section id="tableWrap"></section>
   </main>
   <footer>
-    <span>Канон проекта — папка Google Drive. Браузер только кэш. Войди в Google на каждом устройстве один раз.</span>
+    <span>Общий проект лежит на этом сайте. Вход не нужен.</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
   <script src="./akty.js"></script>
