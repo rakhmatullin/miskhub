@@ -1,4 +1,4 @@
-/* общий проект: не затирать локальную выгрузку */
+/* общий проект: не затирать локальную выгрузку и повёрнутые фото */
 (function () {
   const FOTO_ZIPS = [
     "https://litter.catbox.moe/adhzwp.zip",
@@ -31,6 +31,14 @@
       rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
     }));
   }
+  function idbKeys(store) {
+    return openDb().then((db) => new Promise((res, rej) => {
+      const out = [];
+      const rq = db.transaction(store, "readonly").objectStore(store).openCursor();
+      rq.onsuccess = (e) => { const cur = e.target.result; if (!cur) return res(out); out.push(String(cur.key)); cur.continue(); };
+      rq.onerror = () => rej(rq.error);
+    }));
+  }
   async function loadProject() {
     const r = await fetch("./cloud/project.json?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) throw new Error("no project");
@@ -43,7 +51,7 @@
     data.rows = rows;
     return data;
   }
-  async function ingestZip(buf, deleted) {
+  async function ingestZip(buf, skip) {
     if (!window.JSZip) throw new Error("no jszip");
     const zip = await JSZip.loadAsync(buf);
     let n = 0;
@@ -54,7 +62,7 @@
       const m = String(name).match(/^(\d+)_([12])\./i);
       if (!m) return;
       const key = m[1] + "_" + m[2];
-      if (deleted && deleted.has(key)) return;
+      if (skip && skip.has(key)) return;
       jobs.push(file.async("blob").then((blob) => {
         const typed = new Blob([blob], { type: "image/jpeg" });
         return idbPut("photos", key, { blob: typed, name: name }).then(() => { n++; });
@@ -63,7 +71,7 @@
     await Promise.all(jobs);
     return n;
   }
-  async function loadFotos(deleted) {
+  async function loadFotos(skip) {
     for (const url of FOTO_ZIPS) {
       try {
         status("качаю общий архив фото…");
@@ -72,7 +80,7 @@
         const buf = await r.arrayBuffer();
         if (buf.byteLength < 20000) continue;
         status("раскладываю фото · " + Math.round(buf.byteLength / 1024) + " КБ");
-        const n = await ingestZip(buf, deleted);
+        const n = await ingestZip(buf, skip);
         if (n) return n;
       } catch (e) { console.warn("foto zip", url, e); }
     }
@@ -90,15 +98,18 @@
         dumpName: useRemote ? (data.dumpName || prev.dumpName || "") : (prev.dumpName || data.dumpName || ""),
         actDate: new Date().getFullYear() + "-" + String(new Date().getMonth()+1).padStart(2,"0") + "-" + String(new Date().getDate()).padStart(2,"0"),
         deletedPhotos: prev.deletedPhotos || [],
+        sentActs: prev.sentActs || [],
         localUpdatedAt: prev.localUpdatedAt || Date.now(),
         updatedAt: data.updatedAt
       };
       await idbPut("meta", "state", next);
       if ($("actDate")) $("actDate").value = next.actDate;
-      const deleted = new Set((next.deletedPhotos || []).map(String));
-      const fotos = await loadFotos(deleted);
-      status((useRemote ? "с сайта" : "локальная выгрузка") + " · строк " + (next.rows||[]).length + " · фото " + fotos);
-      const flag = forceRemote ? "miskhub.cloud.forced" : "miskhub.cloud.applied6";
+      const skip = new Set((next.deletedPhotos || []).map(String));
+      const existing = await idbKeys("photos");
+      existing.forEach((k) => skip.add(k));
+      const fotos = await loadFotos(skip);
+      status((useRemote ? "с сайта" : "локальная выгрузка") + " · строк " + (next.rows||[]).length + " · фото +" + fotos);
+      const flag = forceRemote ? "miskhub.cloud.forced" : "miskhub.cloud.applied7";
       if (!sessionStorage.getItem(flag)) {
         sessionStorage.setItem(flag, "1");
         location.reload();
