@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Акты об устранении — MiskHub</title>
   <meta name="theme-color" content="#070b14" />
-  <link rel="stylesheet" href="./akty.css?v=11" />
+  <link rel="stylesheet" href="./akty.css?v=12" />
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -29,7 +29,10 @@
     <section class="tape-wrap">
       <div class="tape-head">
         <div><span class="kicker">Лента по датам</span><strong>Красный — открыт, зелёный — закрыт</strong></div>
-        <div class="act-pill">дата акта <b id="actDateLabel">—</b></div>
+        <div class="tape-tools">
+          <div class="act-pill">дата акта <b id="actDateLabel">—</b></div>
+          <button type="button" id="tapeToggle">свернуть</button>
+        </div>
       </div>
       <div class="tape tape-cal" id="tape"><div class="tape-empty">Загрузи выгрузку — здесь появятся дни</div></div>
       <p class="tape-legend"><i class="sq red"></i> открыт в этот день <i class="sq green"></i> закрыт в этот день</p>
@@ -70,6 +73,6 @@
     <span>Выгрузка на этом компе не затирается при обновлении страницы. «Обновить с сайта» берёт общую версию.</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
-  <script src="./akty.js?v=11"></script>
+  <script src="./akty.js?v=12"></script>
 </body>
 </html>
