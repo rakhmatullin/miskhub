@@ -1,5 +1,9 @@
-/* Общий проект + фото с Drive, без входа */
+/* Общий проект + общий архив фото */
 (function () {
+  const FOTO_ZIPS = [
+    "https://litter.catbox.moe/adhzwp.zip",
+    "https://corsproxy.io/?" + encodeURIComponent("https://litter.catbox.moe/adhzwp.zip")
+  ];
   const $ = (id) => document.getElementById(id);
   function status(t) { if ($("cloudStatus")) $("cloudStatus").textContent = t; }
   function openDb() {
@@ -39,41 +43,38 @@
     data.rows = rows;
     return data;
   }
-  function driveUrls(id) {
-    return [
-      "https://lh3.googleusercontent.com/d/" + id,
-      "https://drive.google.com/thumbnail?id=" + id + "&sz=w1000",
-      "https://corsproxy.io/?" + encodeURIComponent("https://drive.google.com/uc?export=download&id=" + id)
-    ];
-  }
-  async function fetchBlob(urls) {
-    for (const u of urls) {
-      try {
-        const r = await fetch(u, { cache: "no-store" });
-        if (!r.ok) continue;
-        const blob = await r.blob();
-        if (blob && blob.size > 800 && String(blob.type).indexOf("html") < 0) return blob;
-      } catch (e) {}
-    }
-    return null;
+  async function ingestZip(buf) {
+    if (!window.JSZip) throw new Error("no jszip");
+    const zip = await JSZip.loadAsync(buf);
+    let n = 0;
+    const jobs = [];
+    zip.forEach((path, file) => {
+      if (file.dir) return;
+      const name = path.split("/").pop();
+      const m = String(name).match(/^(\d+)_([12])\./i);
+      if (!m) return;
+      jobs.push(file.async("blob").then((blob) => {
+        const typed = blob.type && blob.type.indexOf("image") === 0 ? blob : new Blob([blob], { type: "image/jpeg" });
+        return idbPut("photos", m[1] + "_" + m[2], { blob: typed, name: name }).then(() => { n++; });
+      }));
+    });
+    await Promise.all(jobs);
+    return n;
   }
   async function loadFotos() {
-    const r = await fetch("./cloud/photos.json?t=" + Date.now(), { cache: "no-store" });
-    if (!r.ok) return 0;
-    const map = await r.json();
-    let n = 0;
-    const names = Object.keys(map);
-    for (let i = 0; i < names.length; i++) {
-      const name = names[i];
-      const m = name.match(/^(\d+)_([12])\./i);
-      if (!m) continue;
-      status("фото " + (i + 1) + "/" + names.length);
-      const blob = await fetchBlob(driveUrls(map[name]));
-      if (!blob) continue;
-      await idbPut("photos", m[1] + "_" + m[2], { blob: blob, name: name });
-      n++;
+    for (const url of FOTO_ZIPS) {
+      try {
+        status("качаю общий архив фото…");
+        const r = await fetch(url, { cache: "no-store", mode: "cors" });
+        if (!r.ok) continue;
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength < 20000) continue;
+        status("раскладываю фото · " + Math.round(buf.byteLength / 1024) + " КБ");
+        const n = await ingestZip(buf);
+        if (n) return n;
+      } catch (e) { console.warn("foto zip", url, e); }
     }
-    return n;
+    return 0;
   }
   function paintDl() {
     document.querySelectorAll(".slot.has").forEach((slot) => {
@@ -106,8 +107,8 @@
       }
       const fotos = await loadFotos();
       status("общий проект · строк " + ((data && data.rows) || []).length + " · фото " + fotos);
-      if (!sessionStorage.getItem("miskhub.cloud.applied4")) {
-        sessionStorage.setItem("miskhub.cloud.applied4", "1");
+      if (!sessionStorage.getItem("miskhub.cloud.applied5")) {
+        sessionStorage.setItem("miskhub.cloud.applied5", "1");
         location.reload();
       }
     } catch (e) {
@@ -117,7 +118,7 @@
   }
   function bind() {
     if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () {
-      sessionStorage.removeItem("miskhub.cloud.applied4"); start();
+      sessionStorage.removeItem("miskhub.cloud.applied5"); start();
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { bind(); start(); });
