@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Акты об устранении — MiskHub</title>
   <meta name="theme-color" content="#070b14" />
-  <link rel="stylesheet" href="./akty.css" />
+  <link rel="stylesheet" href="./akty.css?v=11" />
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -24,15 +24,15 @@
     <section class="hero">
       <p class="kicker">Инструмент без ИИ · шаблон + выгрузка</p>
       <h1>Акты об устранении</h1>
-      <p class="lead">Статус только из колонки «Статус». Дата акта ≠ дата предписания. Фото <code>N_1</code> / <code>N_2</code>.</p>
+      <p class="lead">Статус только из колонки «Статус». Дата акта — сегодняшняя дата компьютера. Фото <code>N_1</code> / <code>N_2</code>.</p>
     </section>
     <section class="tape-wrap">
       <div class="tape-head">
-        <div><span class="kicker">Лента срезов</span><strong>Открытые · закрытые · дата акта</strong></div>
+        <div><span class="kicker">Лента по датам</span><strong>Красный — открыт, зелёный — закрыт</strong></div>
         <div class="act-pill">дата акта <b id="actDateLabel">—</b></div>
       </div>
-      <div class="tape" id="tape"><div class="tape-empty">Загрузи выгрузку — здесь появятся дни срезов</div></div>
-      <p class="tape-legend"><i class="sq red"></i> открыто <i class="sq green"></i> закрыто <i class="sq gray"></i> удалено <i class="sq mid"></i> этот срез</p>
+      <div class="tape tape-cal" id="tape"><div class="tape-empty">Загрузи выгрузку — здесь появятся дни</div></div>
+      <p class="tape-legend"><i class="sq red"></i> открыт в этот день <i class="sq green"></i> закрыт в этот день</p>
     </section>
     <section class="cloud-bar">
       <div>
@@ -46,7 +46,7 @@
     <section class="grid-3">
       <label class="drop" id="dropDump"><input type="file" id="fileDump" accept=".xlsx,.xls,.csv" hidden /><span class="tag">1</span><strong>Выгрузка Excel</strong><em id="dumpName">xlsx с колонкой Статус</em></label>
       <label class="drop" id="dropTpl"><input type="file" id="fileTpl" accept=".docx" hidden /><span class="tag">2</span><strong>Шаблон Word</strong><em id="tplName">загружается встроенный</em></label>
-      <div class="drop static"><span class="tag">3</span><strong>Дата акта</strong><input type="date" id="actDate" /><em>не путать с датой предписания</em></div>
+      <div class="drop static"><span class="tag">3</span><strong>Дата акта</strong><input type="date" id="actDate" /><em>сегодня с этого компьютера, не с UTC</em></div>
     </section>
     <section class="stats" id="stats" hidden>
       <div><b id="nOpen">0</b><span>к устранению</span></div>
@@ -60,16 +60,16 @@
       <button type="button" id="btnXlsx">Список.xlsx</button>
       <button type="button" id="btnActs">Акты.docx</button>
       <button type="button" class="primary" id="btnPack">Пакет: акты + фото + список</button>
-      <button type="button" id="btnProject">Скачать прроект</button>
+      <button type="button" id="btnProject">Скачать проект</button>
       <label class="btn-file">Восстановить проект<input type="file" id="fileProject" accept=".zip,.json" hidden /></label>
     </section>
     <section class="tokens"><details><summary>Токены шаблона</summary><div class="token-grid" id="tokenList"></div></details></section>
     <section id="tableWrap"></section>
   </main>
   <footer>
-    <span>Общий проект лежит на этом сайте. Вход не нужен.</span>
+    <span>Выгрузка на этом компе не затирается при обновлении страницы. «Обновить с сайта» берёт общую версию.</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
-  <script src="./akty.js"></script>
+  <script src="./akty.js?v=11"></script>
 </body>
 </html>
