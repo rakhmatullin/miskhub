@@ -1,10 +1,5 @@
-/* Общий проект + фото без входа */
+/* Общий проект + фото с Drive, без входа */
 (function () {
-  const FOTO_ZIP = [
-    "./cloud/fotos.zip",
-    "https://corsproxy.io/?" + encodeURIComponent("https://drive.google.com/uc?export=download&id=152yeA_XT-FJmR2URN5-a_yxdcJj5EqmC"),
-    "https://corsproxy.io/?" + encodeURIComponent("https://drive.google.com/uc?export=download&id=1CfEDQ3SC9XHs8Bn7tI7qWAIwX4fXeYF7")
-  ];
   const $ = (id) => document.getElementById(id);
   function status(t) { if ($("cloudStatus")) $("cloudStatus").textContent = t; }
   function openDb() {
@@ -44,34 +39,41 @@
     data.rows = rows;
     return data;
   }
-  async function ingestZip(buf) {
-    if (!window.JSZip) return 0;
-    const zip = await JSZip.loadAsync(buf);
-    let n = 0;
-    const jobs = [];
-    zip.forEach((path, file) => {
-      if (file.dir) return;
-      const name = path.split("/").pop();
-      const m = String(name).match(/^(\d+)_([12])\./i);
-      if (!m) return;
-      jobs.push(file.async("blob").then((blob) => idbPut("photos", m[1] + "_" + m[2], { blob: blob, name: name }).then(() => { n++; })));
-    });
-    await Promise.all(jobs);
-    return n;
+  function driveUrls(id) {
+    return [
+      "https://lh3.googleusercontent.com/d/" + id,
+      "https://drive.google.com/thumbnail?id=" + id + "&sz=w1000",
+      "https://corsproxy.io/?" + encodeURIComponent("https://drive.google.com/uc?export=download&id=" + id)
+    ];
+  }
+  async function fetchBlob(urls) {
+    for (const u of urls) {
+      try {
+        const r = await fetch(u, { cache: "no-store" });
+        if (!r.ok) continue;
+        const blob = await r.blob();
+        if (blob && blob.size > 800 && String(blob.type).indexOf("html") < 0) return blob;
+      } catch (e) {}
+    }
+    return null;
   }
   async function loadFotos() {
-    for (const url of FOTO_ZIP) {
-      try {
-        status("загружаю общие фото…");
-        const r = await fetch(url, { cache: "no-store" });
-        if (!r.ok) continue;
-        const buf = await r.arrayBuffer();
-        if (buf.byteLength < 10000) continue;
-        const n = await ingestZip(buf);
-        if (n) return n;
-      } catch (e) { console.warn("foto zip", url, e); }
+    const r = await fetch("./cloud/photos.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return 0;
+    const map = await r.json();
+    let n = 0;
+    const names = Object.keys(map);
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      const m = name.match(/^(\d+)_([12])\./i);
+      if (!m) continue;
+      status("фото " + (i + 1) + "/" + names.length);
+      const blob = await fetchBlob(driveUrls(map[name]));
+      if (!blob) continue;
+      await idbPut("photos", m[1] + "_" + m[2], { blob: blob, name: name });
+      n++;
     }
-    return 0;
+    return n;
   }
   function paintDl() {
     document.querySelectorAll(".slot.has").forEach((slot) => {
@@ -79,26 +81,19 @@
       const img = slot.querySelector("img");
       if (!img) return;
       const b = document.createElement("button");
-      b.type = "button";
-      b.className = "dl";
-      b.dataset.dl = img.alt || "foto";
-      b.title = "скачать фото";
-      b.textContent = "↓";
+      b.type = "button"; b.className = "dl"; b.dataset.dl = img.alt || "foto";
+      b.title = "скачать фото"; b.textContent = "↓";
+      b.style.cssText = "position:absolute;top:4px;left:4px;background:#000c;color:#fff;border:0;border-radius:6px;padding:2px 6px;cursor:pointer";
       slot.appendChild(b);
     });
   }
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-dl]");
     if (!b) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const slot = b.closest(".slot");
-    const img = slot && slot.querySelector("img");
+    e.preventDefault(); e.stopPropagation();
+    const img = b.closest(".slot") && b.closest(".slot").querySelector("img");
     if (!img || !img.src) return;
-    const a = document.createElement("a");
-    a.href = img.src;
-    a.download = (b.dataset.dl || "foto") + ".jpg";
-    a.click();
+    const a = document.createElement("a"); a.href = img.src; a.download = (b.dataset.dl || "foto") + ".jpg"; a.click();
   });
   setInterval(paintDl, 700);
   async function start() {
@@ -107,17 +102,12 @@
       const data = await loadProject();
       if (data.rows && data.rows.length) {
         const prev = (await idbGet("meta", "state")) || {};
-        await idbPut("meta", "state", {
-          rows: data.rows,
-          dumpName: data.dumpName || prev.dumpName || "",
-          actDate: data.actDate || prev.actDate || "",
-          updatedAt: data.updatedAt
-        });
+        await idbPut("meta", "state", { rows: data.rows, dumpName: data.dumpName || prev.dumpName || "", actDate: data.actDate || prev.actDate || "", updatedAt: data.updatedAt });
       }
       const fotos = await loadFotos();
       status("общий проект · строк " + ((data && data.rows) || []).length + " · фото " + fotos);
-      if (!sessionStorage.getItem("miskhub.cloud.applied3")) {
-        sessionStorage.setItem("miskhub.cloud.applied3", "1");
+      if (!sessionStorage.getItem("miskhub.cloud.applied4")) {
+        sessionStorage.setItem("miskhub.cloud.applied4", "1");
         location.reload();
       }
     } catch (e) {
@@ -127,7 +117,7 @@
   }
   function bind() {
     if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () {
-      sessionStorage.removeItem("miskhub.cloud.applied3"); start();
+      sessionStorage.removeItem("miskhub.cloud.applied4"); start();
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { bind(); start(); });
