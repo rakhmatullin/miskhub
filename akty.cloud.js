@@ -73,6 +73,34 @@
     }
     return 0;
   }
+  function paintDl() {
+    document.querySelectorAll(".slot.has").forEach((slot) => {
+      if (slot.querySelector("[data-dl]")) return;
+      const img = slot.querySelector("img");
+      if (!img) return;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "dl";
+      b.dataset.dl = img.alt || "foto";
+      b.title = "скачать фото";
+      b.textContent = "↓";
+      slot.appendChild(b);
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dl]");
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const slot = b.closest(".slot");
+    const img = slot && slot.querySelector("img");
+    if (!img || !img.src) return;
+    const a = document.createElement("a");
+    a.href = img.src;
+    a.download = (b.dataset.dl || "foto") + ".jpg";
+    a.click();
+  });
+  setInterval(paintDl, 700);
   async function start() {
     status("читаю общий проект…");
     try {
@@ -88,8 +116,8 @@
       }
       const fotos = await loadFotos();
       status("общий проект · строк " + ((data && data.rows) || []).length + " · фото " + fotos);
-      if (!sessionStorage.getItem("miskhub.cloud.applied2")) {
-        sessionStorage.setItem("miskhub.cloud.applied2", "1");
+      if (!sessionStorage.getItem("miskhub.cloud.applied3")) {
+        sessionStorage.setItem("miskhub.cloud.applied3", "1");
         location.reload();
       }
     } catch (e) {
@@ -99,7 +127,7 @@
   }
   function bind() {
     if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () {
-      sessionStorage.removeItem("miskhub.cloud.applied2"); start();
+      sessionStorage.removeItem("miskhub.cloud.applied3"); start();
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { bind(); start(); });
