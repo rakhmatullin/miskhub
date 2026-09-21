@@ -1,6 +1,6 @@
 /* общее хранилище: state + фото в KVS, IDB кэш */
 (function () {
-  const REMOTE = "https://kvs.ix.workers.dev/miskhub-akty-state-rakhmatullin-2026.json";
+  const REMOTE = "https://kvs.ix.workers.dev/miskhub-akty-state-rakhmatullin-20260921.json";
   const FOTO = function (key) { return "https://kvs.ix.workers.dev/miskhub-foto-" + key + ".jpg"; };
   const ZIPS = [
     "https://litter.catbox.moe/f1zgce.zip",
@@ -164,8 +164,7 @@
     const local = await gatherState();
     const localStamp = Number(prev.localUpdatedAt || local.localUpdatedAt || 0);
     const remoteStamp = Number(remote.updatedAt || 0);
-    const dumpChanged = !!(local.dumpName && local.dumpName !== (remote.dumpName || ""));
-    const useLocal = forceRows || (local.rows && local.rows.length && (localStamp >= remoteStamp || dumpChanged || !remote.rows || !remote.rows.length));
+    const useLocal = forceRows || (local.rows && local.rows.length && localStamp >= remoteStamp) || (local.rows && local.rows.length && !(remote.rows && remote.rows.length));
     const now = Date.now();
     const state = {
       rev: now,
@@ -207,10 +206,10 @@
   }
   async function pushDumpAfterParse() {
     status("отправляю выгрузку в общее хранилище…");
-    const started = Date.now();
     const before = (await idbGet("meta", "state")) || {};
     const beforeName = before.dumpName || "";
     const beforeCount = (before.rows || []).length;
+    const started = Date.now();
     for (let i = 0; i < 24; i++) {
       await new Promise(function (r) { setTimeout(r, 250); });
       const st = (await idbGet("meta", "state")) || {};
@@ -219,8 +218,7 @@
       if (lastCount && (lastName !== beforeName || lastCount !== beforeCount || Date.now() - started > 400)) {
         await stampLocal({ rows: st.rows, dumpName: st.dumpName });
         const sent = await pushAll(false, true);
-        const n = ((sent && sent.rows) || st.rows || []).length;
-        status("общее хранилище · выгрузка " + (st.dumpName || "") + " · строк " + n);
+        status("общее хранилище · выгрузка " + (st.dumpName || "") + " · строк " + ((sent && sent.rows) || st.rows).length);
         return sent;
       }
     }
@@ -280,7 +278,7 @@
       }
       added += await pullPhotos(remote.photoKeys || [], skip);
       status("общее хранилище · " + (next.dumpName || "без имени") + " · строк " + (next.rows || []).length + " · фото +" + added);
-      const flag = force ? "miskhub.cloud.forced" : "miskhub.cloud.applied11";
+      const flag = force ? "miskhub.cloud.forced" : "miskhub.cloud.applied12";
       if (!sessionStorage.getItem(flag)) { sessionStorage.setItem(flag, "1"); location.reload(); }
     } catch (e) { console.warn(e); status("синхронизация не удалась"); }
   }
