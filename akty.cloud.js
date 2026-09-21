@@ -1,101 +1,71 @@
-/* общий state: kvs + github, IDB только кэш */
+/* общее хранилище: state + фото в KVS, IDB кэш */
 (function () {
   const REMOTE = "https://kvs.ix.workers.dev/miskhub-akty-state-rakhmatullin-2026.json";
-  const FOTO_ZIPS = [
+  const FOTO = function (key) { return "https://kvs.ix.workers.dev/miskhub-foto-" + key + ".jpg"; };
+  const ZIPS = [
+    "https://litter.catbox.moe/3ebvzg.zip",
     "https://litter.catbox.moe/ws6pzp.zip",
-    "https://litter.catbox.moe/zuacqz.zip",
-    "https://corsproxy.io/?" + encodeURIComponent("https://litter.catbox.moe/ws6pzp.zip")
+    "https://litter.catbox.moe/zuacqz.zip"
   ];
-  const $ = (id) => document.getElementById(id);
+  const SEED_DEL = ["92_1","92_2","92_3","94_1","94_2","94_3"];
+  const $ = function (id) { return document.getElementById(id); };
   function status(t) { if ($("cloudStatus")) $("cloudStatus").textContent = t; }
-  function emptyState() {
-    return { rev: 0, updatedAt: 0, deletedPhotos: ["92_1","92_2","92_3"], comments: {}, sentActs: [], notes2812: "", rotate: {}, sortDir: 1 };
-  }
-  function normState(s) {
-    const d = emptyState();
-    if (!s || typeof s !== "object") return d;
-    d.rev = Number(s.rev) || 0;
-    d.updatedAt = Number(s.updatedAt) || 0;
-    d.deletedPhotos = [...new Set([].concat(s.deletedPhotos || d.deletedPhotos).map(String))];
-    d.comments = s.comments && typeof s.comments === "object" ? s.comments : {};
-    d.sentActs = [...new Set([].concat(s.sentActs || []).map(String))];
-    d.notes2812 = String(s.notes2812 || "");
-    d.rotate = s.rotate && typeof s.rotate === "object" ? s.rotate : {};
-    d.sortDir = s.sortDir === -1 ? -1 : 1;
-    return d;
-  }
-  function mergeState(a, b) {
-    const x = normState(a), y = normState(b);
-    const newer = (y.updatedAt || 0) >= (x.updatedAt || 0) ? y : x;
-    const older = newer === y ? x : y;
-    return {
-      rev: Math.max(x.rev, y.rev),
-      updatedAt: Math.max(x.updatedAt || 0, y.updatedAt || 0),
-      deletedPhotos: [...new Set(x.deletedPhotos.concat(y.deletedPhotos))],
-      comments: Object.assign({}, older.comments, newer.comments),
-      sentActs: [...new Set(x.sentActs.concat(y.sentActs))],
-      notes2812: (y.updatedAt >= x.updatedAt ? y.notes2812 : x.notes2812) || x.notes2812 || y.notes2812,
-      rotate: Object.assign({}, older.rotate, newer.rotate),
-      sortDir: newer.sortDir
-    };
-  }
   function openDb() {
-    return new Promise((resolve, reject) => {
+    return new Promise(function (resolve, reject) {
       const req = indexedDB.open("miskhub-akty", 2);
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = function () {
         const db = req.result;
         if (!db.objectStoreNames.contains("photos")) db.createObjectStore("photos");
         if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
         if (!db.objectStoreNames.contains("snapshots")) db.createObjectStore("snapshots", { autoIncrement: true });
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
     });
   }
   function idbPut(store, key, val) {
-    return openDb().then((db) => new Promise((res, rej) => {
+    return openDb().then(function (db) { return new Promise(function (res, rej) {
       const tx = db.transaction(store, "readwrite"); tx.objectStore(store).put(val, key);
-      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-    }));
+      tx.oncomplete = res; tx.onerror = function () { rej(tx.error); };
+    }); });
   }
   function idbGet(store, key) {
-    return openDb().then((db) => new Promise((res, rej) => {
+    return openDb().then(function (db) { return new Promise(function (res, rej) {
       const rq = db.transaction(store, "readonly").objectStore(store).get(key);
-      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
-    }));
+      rq.onsuccess = function () { res(rq.result); }; rq.onerror = function () { rej(rq.error); };
+    }); });
   }
   function idbDel(store, key) {
-    return openDb().then((db) => new Promise((res, rej) => {
+    return openDb().then(function (db) { return new Promise(function (res, rej) {
       const tx = db.transaction(store, "readwrite"); tx.objectStore(store).delete(key);
-      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-    }));
+      tx.oncomplete = res; tx.onerror = function () { rej(tx.error); };
+    }); });
   }
   function idbKeys(store) {
-    return openDb().then((db) => new Promise((res, rej) => {
+    return openDb().then(function (db) { return new Promise(function (res, rej) {
       const out = [];
       const rq = db.transaction(store, "readonly").objectStore(store).openCursor();
-      rq.onsuccess = (e) => { const cur = e.target.result; if (!cur) return res(out); out.push(String(cur.key)); cur.continue(); };
-      rq.onerror = () => rej(rq.error);
-    }));
+      rq.onsuccess = function (e) { const cur = e.target.result; if (!cur) return res(out); out.push(String(cur.key)); cur.continue(); };
+      rq.onerror = function () { rej(rq.error); };
+    }); });
   }
-  async function pullRemote() {
-    let s = emptyState();
+  function union(a, b) { return Array.from(new Set([].concat(a || [], b || []).map(String))); }
+  async function getRemote() {
     try {
       const r = await fetch(REMOTE + "?t=" + Date.now(), { cache: "no-store", mode: "cors" });
-      if (r.ok) s = mergeState(s, await r.json());
-    } catch (e) { console.warn("kvs", e); }
+      if (r.ok) return await r.json();
+    } catch (e) {}
     try {
       const r = await fetch("./cloud/state.json?t=" + Date.now(), { cache: "no-store" });
-      if (r.ok) s = mergeState(s, await r.json());
+      if (r.ok) return await r.json();
     } catch (e) {}
-    return s;
+    return {};
   }
-  let pushTimer = 0;
-  function schedulePush(state) {
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(function () {
-      fetch(REMOTE, { method: "PUT", mode: "cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(normState(state)) }).catch(function () {});
-    }, 300);
+  async function putRemote(state) {
+    try {
+      await fetch(REMOTE, { method: "PUT", mode: "cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state) });
+      return true;
+    } catch (e) { return false; }
   }
   async function loadProject() {
     const r = await fetch("./cloud/project.json?t=" + Date.now(), { cache: "no-store" });
@@ -110,106 +80,173 @@
     return data;
   }
   async function ingestZip(buf, skip) {
-    if (!window.JSZip) throw new Error("no jszip");
+    if (!window.JSZip) return 0;
     const zip = await JSZip.loadAsync(buf);
     let n = 0;
     const jobs = [];
-    zip.forEach((path, file) => {
+    zip.forEach(function (path, file) {
       if (file.dir) return;
       const name = path.split("/").pop();
       const m = String(name).match(/^(\d+)_([123])\./i);
       if (!m) return;
       const key = m[1] + "_" + m[2];
-      if (skip && skip.has(key)) return;
-      jobs.push(file.async("blob").then((blob) => {
-        return idbPut("photos", key, { blob: new Blob([blob], { type: "image/jpeg" }), name: name }).then(() => { n++; });
+      if (skip.has(key)) return;
+      jobs.push(file.async("blob").then(function (blob) {
+        return idbPut("photos", key, { blob: new Blob([blob], { type: "image/jpeg" }), name: name }).then(function () { n++; });
       }));
     });
     await Promise.all(jobs);
     return n;
   }
-  async function loadFotos(skip) {
-    let total = 0;
-    for (const url of FOTO_ZIPS) {
+  async function pullPhotos(keys, skip) {
+    let n = 0;
+    for (const key of keys || []) {
+      if (skip.has(key)) continue;
       try {
-        status("качаю фото…");
-        const r = await fetch(url, { cache: "no-store", mode: "cors" });
+        const r = await fetch(FOTO(key) + "?t=" + Date.now(), { cache: "no-store", mode: "cors" });
         if (!r.ok) continue;
         const buf = await r.arrayBuffer();
-        if (buf.byteLength < 10000) continue;
-        total += await ingestZip(buf, skip);
-      } catch (e) { console.warn("foto zip", url, e); }
+        if (buf.byteLength < 40) continue;
+        await idbPut("photos", key, { blob: new Blob([buf], { type: "image/jpeg" }), name: key + ".jpg" });
+        n++;
+      } catch (e) {}
     }
-    return total;
+    return n;
   }
-  async function applyDeleted(deleted) {
-    for (const key of deleted) { try { await idbDel("photos", key); } catch (e) {} }
+  async function pushPhoto(key, blob) {
+    try {
+      await fetch(FOTO(key), { method: "PUT", mode: "cors", headers: { "Content-Type": "image/jpeg" }, body: blob });
+      return true;
+    } catch (e) { return false; }
   }
-  function todayISO() {
-    const d = new Date();
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  async function gatherState() {
+    const prev = (await idbGet("meta", "state")) || {};
+    const deleted = union(prev.deletedPhotos, SEED_DEL);
+    const keys = await idbKeys("photos");
+    return {
+      rev: Date.now(),
+      updatedAt: Date.now(),
+      deletedPhotos: deleted,
+      comments: prev.comments || {},
+      sentActs: prev.sentActs || [],
+      notes2812: prev.notes2812 || "",
+      rotate: prev.rotate || {},
+      rows: prev.rows || [],
+      dumpName: prev.dumpName || "",
+      photoKeys: keys.filter(function (k) { return deleted.indexOf(k) < 0; })
+    };
   }
-  async function start(forceRemote) {
+  let pushBusy = false;
+  async function pushAll(alsoPhotos) {
+    if (pushBusy) return;
+    pushBusy = true;
+    try {
+      const remote = await getRemote();
+      const local = await gatherState();
+      const state = {
+        rev: Date.now(),
+        updatedAt: Date.now(),
+        deletedPhotos: union(remote.deletedPhotos, local.deletedPhotos),
+        comments: Object.assign({}, remote.comments || {}, local.comments || {}),
+        sentActs: union(remote.sentActs, local.sentActs),
+        notes2812: local.notes2812 || remote.notes2812 || "",
+        rotate: Object.assign({}, remote.rotate || {}, local.rotate || {}),
+        rows: (local.rows && local.rows.length && (local.updatedAt || Date.now()) >= (remote.updatedAt || 0)) ? local.rows : (remote.rows && remote.rows.length ? remote.rows : local.rows),
+        dumpName: local.dumpName || remote.dumpName || "",
+        photoKeys: union(remote.photoKeys, local.photoKeys)
+      };
+      if (local.rows && local.rows.length && (!remote.rows || !remote.rows.length || (await idbGet("meta", "state") || {}).localUpdatedAt > (remote.updatedAt || 0))) {
+        state.rows = local.rows;
+        state.dumpName = local.dumpName || state.dumpName;
+      }
+      await putRemote(state);
+      if (alsoPhotos) {
+        const deleted = new Set(state.deletedPhotos);
+        const keys = await idbKeys("photos");
+        for (let i = 0; i < keys.length; i++) {
+          const key = keys[i];
+          if (deleted.has(key)) continue;
+          const rec = await idbGet("photos", key);
+          if (rec && rec.blob) await pushPhoto(key, rec.blob);
+        }
+      }
+      return state;
+    } finally { pushBusy = false; }
+  }
+  async function start(force) {
     status("синхронизация…");
     try {
-      const remote = await pullRemote();
+      const remote = await getRemote();
       const data = await loadProject();
       const prev = (await idbGet("meta", "state")) || {};
-      const merged = mergeState({
-        comments: prev.comments || {}, sentActs: prev.sentActs || [], notes2812: prev.notes2812 || "",
-        deletedPhotos: prev.deletedPhotos || [], rotate: prev.rotate || {}, sortDir: prev.sortDir || 1,
-        updatedAt: prev.localUpdatedAt || 0
-      }, remote);
-      ["92_1","92_2","92_3"].forEach(function (k) { if (merged.deletedPhotos.indexOf(k) < 0) merged.deletedPhotos.push(k); });
-      const localRows = Array.isArray(prev.rows) && prev.rows.length;
-      const useRemoteRows = forceRemote || !localRows;
+      const deleted = union(SEED_DEL, remote.deletedPhotos, prev.deletedPhotos);
+      const remoteNewer = (remote.updatedAt || 0) > (prev.localUpdatedAt || 0);
+      const rows = (remote.rows && remote.rows.length && (force || remoteNewer || !(prev.rows && prev.rows.length)))
+        ? remote.rows
+        : ((prev.rows && prev.rows.length) ? prev.rows : (data.rows || []));
       const next = {
-        rows: useRemoteRows ? (data.rows || []) : prev.rows,
-        dumpName: useRemoteRows ? (data.dumpName || prev.dumpName || "") : (prev.dumpName || data.dumpName || ""),
-        actDate: todayISO(),
-        deletedPhotos: merged.deletedPhotos,
-        sentActs: merged.sentActs,
-        comments: merged.comments,
-        notes2812: merged.notes2812,
-        rotate: merged.rotate,
-        sortDir: merged.sortDir,
-        localUpdatedAt: Date.now(),
-        updatedAt: merged.updatedAt
+        rows: rows,
+        dumpName: remote.dumpName || prev.dumpName || data.dumpName || "",
+        actDate: new Date().getFullYear() + "-" + String(new Date().getMonth()+1).padStart(2,"0") + "-" + String(new Date().getDate()).padStart(2,"0"),
+        deletedPhotos: deleted,
+        sentActs: union(prev.sentActs, remote.sentActs),
+        comments: Object.assign({}, remote.comments || {}, prev.comments || {}),
+        notes2812: prev.notes2812 || remote.notes2812 || "",
+        rotate: Object.assign({}, remote.rotate || {}, prev.rotate || {}),
+        sortDir: 1,
+        localUpdatedAt: prev.localUpdatedAt || Date.now(),
+        updatedAt: Math.max(prev.localUpdatedAt || 0, remote.updatedAt || 0)
       };
       await idbPut("meta", "state", next);
-      await applyDeleted(next.deletedPhotos);
+      for (let i = 0; i < deleted.length; i++) { try { await idbDel("photos", deleted[i]); } catch (e) {} }
       if ($("actDate")) $("actDate").value = next.actDate;
-      const skip = new Set(next.deletedPhotos.map(String));
-      const existing = await idbKeys("photos");
-      existing.forEach(function (k) { skip.add(k); });
-      next.deletedPhotos.forEach(function (k) { skip.add(k); });
-      const fotos = await loadFotos(skip);
-      schedulePush(merged);
-      status("общее хранилище · строк " + (next.rows || []).length + " · фото +" + fotos);
-      const flag = forceRemote ? "miskhub.cloud.forced" : "miskhub.cloud.applied8";
+      const skip = new Set(deleted);
+      const have = await idbKeys("photos");
+      have.forEach(function (k) { skip.add(k); });
+      let added = 0;
+      for (let z = 0; z < ZIPS.length; z++) {
+        try {
+          const r = await fetch(ZIPS[z], { cache: "no-store", mode: "cors" });
+          if (!r.ok) continue;
+          const buf = await r.arrayBuffer();
+          if (buf.byteLength < 10000) continue;
+          added += await ingestZip(buf, skip);
+          (await idbKeys("photos")).forEach(function (k) { skip.add(k); });
+        } catch (e) {}
+      }
+      added += await pullPhotos(remote.photoKeys || [], skip);
+      status("общее хранилище · строк " + (next.rows || []).length + " · фото +" + added);
+      const flag = force ? "miskhub.cloud.forced" : "miskhub.cloud.applied9";
       if (!sessionStorage.getItem(flag)) { sessionStorage.setItem(flag, "1"); location.reload(); }
     } catch (e) { console.warn(e); status("синхронизация не удалась"); }
   }
   window.MiskSync = {
-    async snapshotFromIdb() {
-      const prev = (await idbGet("meta", "state")) || {};
-      schedulePush(normState(Object.assign({}, prev, { updatedAt: Date.now() })));
-    },
-    async savePartial(patch) {
+    savePartial: async function (patch) {
       const prev = (await idbGet("meta", "state")) || {};
       const next = Object.assign({}, prev, patch, { localUpdatedAt: Date.now() });
-      if (patch.deletedPhotos) next.deletedPhotos = [...new Set([].concat(prev.deletedPhotos || [], patch.deletedPhotos))];
+      if (patch.deletedPhotos) next.deletedPhotos = union(prev.deletedPhotos, patch.deletedPhotos);
       await idbPut("meta", "state", next);
-      if (patch.deletedPhotos) await applyDeleted(next.deletedPhotos);
-      schedulePush(normState(next));
-    }
+      if (patch.deletedPhotos) {
+        const d = next.deletedPhotos;
+        for (let i = 0; i < d.length; i++) { try { await idbDel("photos", d[i]); } catch (e) {} }
+      }
+      await pushAll(false);
+    },
+    pushNow: function (photos) { return pushAll(!!photos); }
   };
-  setInterval(function () { if (window.MiskSync) window.MiskSync.snapshotFromIdb(); }, 5000);
   function bind() {
     if ($("btnCloudPull")) $("btnCloudPull").addEventListener("click", function () {
       sessionStorage.removeItem("miskhub.cloud.forced"); start(true);
     });
+    document.addEventListener("change", function (e) {
+      if (e.target && e.target.id === "fileDump") setTimeout(function () { pushAll(false); }, 1200);
+      if (e.target && e.target.closest && e.target.closest("input[data-slot]")) setTimeout(function () { pushAll(true); }, 800);
+    });
+    document.addEventListener("click", function (e) {
+      if (e.target && e.target.closest && e.target.closest("[data-del]")) setTimeout(function () { pushAll(false); }, 400);
+    });
   }
+  setInterval(function () { pushAll(false); }, 8000);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { bind(); start(false); });
   else { bind(); start(false); }
 })();
