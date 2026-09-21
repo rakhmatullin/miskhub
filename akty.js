@@ -5,7 +5,7 @@
     return fetch(src).then(function(r){ if(!r.ok) throw new Error(src+' '+r.status); return r.text(); });
   }
   function extras(){
-    return boot('./akty.cloud.js?v=17').then(function(t){ inject(t); return boot('./akty.overlay.js?v=17'); }).then(function(t){ inject(t); });
+    return boot('./akty.cloud.js?v=18').then(function(t){ inject(t); return boot('./akty.overlay.js?v=18'); }).then(function(t){ inject(t); });
   }
   var sources = [
     'https://litter.catbox.moe/6akequ.js',
@@ -17,7 +17,7 @@
       return;
     }
     boot(sources[i]).then(function(txt){
-      if (!txt || txt.length < 1000 || txt.trim() === 'PLACEHOLDER') throw new Error('short');
+      if (!txt || txt.length < 1000) throw new Error('short');
       inject(txt);
       return extras();
     }).catch(function(){ next(i+1); });
