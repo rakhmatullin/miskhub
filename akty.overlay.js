@@ -99,5 +99,15 @@
     const row = document.getElementById("act-" + jump.dataset.jump);
     if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
   });
-  setInterval(function () { dedupeTape(); fixLabels(); ensureSort(); scrollTapeEnd(); }, 400);
+  var lastDumpLabel = ($("dumpName") && $("dumpName").textContent) || "";
+  setInterval(function () {
+    dedupeTape(); fixLabels(); ensureSort(); scrollTapeEnd();
+    const el = $("dumpName");
+    if (!el) return;
+    const cur = el.textContent || "";
+    if (cur && cur !== lastDumpLabel && /xlsx|xls|csv|строк/i.test(cur) && window.MiskSync && window.MiskSync.pushDump) {
+      lastDumpLabel = cur;
+      window.MiskSync.pushDump();
+    }
+  }, 400);
 })();
