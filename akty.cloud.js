@@ -3,11 +3,13 @@
   const REMOTE = "https://kvs.ix.workers.dev/miskhub-akty-state-rakhmatullin-2026.json";
   const FOTO = function (key) { return "https://kvs.ix.workers.dev/miskhub-foto-" + key + ".jpg"; };
   const ZIPS = [
+    "https://litter.catbox.moe/f1zgce.zip",
     "https://litter.catbox.moe/3ebvzg.zip",
     "https://litter.catbox.moe/ws6pzp.zip",
     "https://litter.catbox.moe/zuacqz.zip"
   ];
-  const SEED_DEL = ["92_1","92_2","92_3","94_1","94_2","94_3"];
+  const SEED_DEL = ["92_1","92_2","92_3","94_1","94_2","94_3","120_1","120_2","120_3"];
+  const SEED_UNDEL = ["27_3"];
   const $ = function (id) { return document.getElementById(id); };
   function status(t) { if ($("cloudStatus")) $("cloudStatus").textContent = t; }
   function openDb() {
@@ -49,7 +51,14 @@
       rq.onerror = function () { rej(rq.error); };
     }); });
   }
-  function union(a, b) { return Array.from(new Set([].concat(a || [], b || []).map(String))); }
+  function union() {
+    const out = [];
+    for (let i = 0; i < arguments.length; i++) {
+      const arr = arguments[i] || [];
+      for (let j = 0; j < arr.length; j++) out.push(String(arr[j]));
+    }
+    return Array.from(new Set(out)).filter(function (k) { return SEED_UNDEL.indexOf(k) < 0; });
+  }
   async function getRemote() {
     try {
       const r = await fetch(REMOTE + "?t=" + Date.now(), { cache: "no-store", mode: "cors" });
@@ -216,7 +225,7 @@
       }
       added += await pullPhotos(remote.photoKeys || [], skip);
       status("общее хранилище · строк " + (next.rows || []).length + " · фото +" + added);
-      const flag = force ? "miskhub.cloud.forced" : "miskhub.cloud.applied9";
+      const flag = force ? "miskhub.cloud.forced" : "miskhub.cloud.applied10";
       if (!sessionStorage.getItem(flag)) { sessionStorage.setItem(flag, "1"); location.reload(); }
     } catch (e) { console.warn(e); status("синхронизация не удалась"); }
   }
