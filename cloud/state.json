@@ -1,10 +1,7 @@
 {
-  "rev": 1,
-  "updatedAt": 1789989600000,
-  "deletedPhotos": ["92_1", "92_2", "92_3"],
+  "deletedPhotos": ["92_1", "92_2", "92_3", "94_1", "94_2", "94_3", "120_1"],
   "comments": {},
-  "sentActs": [],
   "notes2812": "",
-  "rotate": {},
+  "sentActs": [],
   "sortDir": 1
 }
