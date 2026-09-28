@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MiskHub</title>
     <meta name="theme-color" content="#070b14" />
-    <meta name="description" content="Инструменты инженера ПТО: устранение замечаний, сверка весов, граф знаний." />
+    <meta name="description" content="Инструменты инженера ПТО: акты об устранении, сверка весов, фотофиксация." />
     <link rel="icon" type="image/svg+xml" href="/miskhub/assets/favicon-DBfTAH7Q.svg" />
     <script type="module" crossorigin src="/miskhub/assets/main-B0uSOz_s.js"></script>
     <link rel="modulepreload" crossorigin href="/miskhub/assets/app-spxHeBi4.js">
@@ -14,50 +14,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      (function () {
-        function injectNav() {
-          var header = document.querySelector("header");
-          if (!header || header.querySelector("[data-akty]")) return !!(header && header.querySelector("[data-akty]"));
-          var links = header.querySelectorAll("a");
-          if (!links.length) return false;
-          var a = document.createElement("a");
-          a.setAttribute("data-akty", "1");
-          a.href = "/miskhub/akty.html";
-          a.textContent = "Акты об устранении";
-          a.className = links[links.length - 1].className;
-          (links[1] || links[0]).after(a);
-          return true;
-        }
-        function injectCard() {
-          var titles = document.querySelectorAll("h2");
-          for (var i = 0; i < titles.length; i++) {
-            var h = titles[i];
-            var name = (h.textContent || "").toLowerCase();
-            if (name.indexOf("акт") === -1) continue;
-            var card = h.parentElement;
-            if (!card || card.querySelector("[data-akty-open]")) continue;
-            var dead = null;
-            var nodes = card.querySelectorAll("div");
-            for (var j = 0; j < nodes.length; j++) {
-              if ((nodes[j].textContent || "").indexOf("графе знаний") !== -1) dead = nodes[j];
-            }
-            var btn = document.createElement("a");
-            btn.setAttribute("data-akty-open", "1");
-            btn.href = "/miskhub/akty.html";
-            btn.textContent = "Открыть инструмент";
-            btn.style.cssText = "display:flex;align-items:center;justify-content:center;margin-top:16px;height:40px;width:100%;border-radius:8px;background:#7dd3fc;color:#070b14;font:600 14px/1 system-ui,sans-serif;text-decoration:none";
-            if (dead) dead.replaceWith(btn);
-            else card.appendChild(btn);
-          }
-        }
-        var n = 0;
-        var t = setInterval(function () {
-          injectNav();
-          injectCard();
-          if (++n > 80) clearInterval(t);
-        }, 80);
-      })();
-    </script>
+    <script src="/miskhub/hub-nav.js"></script>
   </body>
 </html>

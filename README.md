@@ -5,9 +5,11 @@
 **https://rakhmatullin.github.io/miskhub/**
 
 - Граф: https://rakhmatullin.github.io/miskhub/
-- Устранение замечаний: https://rakhmatullin.github.io/miskhub/ustranenie.html
 - Акты об устранении: https://rakhmatullin.github.io/miskhub/akty.html
 - Сверка весов: https://rakhmatullin.github.io/miskhub/sverka-vesov.html
+- Фотофиксация: https://rakhmatullin.github.io/miskhub/fotofiksaciya.html
+
+Вершины графа — только эти три инструмента. Инструмент «Устранение замечаний» удалён.
 
 ## Акты об устранении
 
@@ -19,3 +21,7 @@
 4. В пакет попадают только «К устранению». Удалено/закрыто — статус выгрузки, не вечный номер.
 5. Фото: `N_1` до, `N_2` после. В Word не вставляются.
 6. Скачать список.xlsx, zip актов или полный пакет.
+
+## Фотофиксация
+
+Загрузить кадры с объекта (пикеты / обход / дрон). Собрать ленту и видео «пролёт дроном».
