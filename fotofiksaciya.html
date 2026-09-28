@@ -55,11 +55,11 @@
   <main>
     <p class="kicker">Инструмент · пролёт дроном</p>
     <h1>Фотофиксация</h1>
-    <p class="lead">Те же кадры с объекта уже в ленте. «Пролёт» — наезд и смещение камеры по трассе забора. Можно докинуть свои фото.</p>
+    <p class="lead">Те же кадры с объекта уже в ленте. «Пролёт» — наезд и смещение камеры по трассе забора.</p>
     <label class="drop" id="drop">
       <input id="files" type="file" accept="image/*" multiple hidden />
       <strong>Добавить свои кадры</strong>
-      <em>или оставить текущие 8 фото объекта и сразу жать «Пролёт»</em>
+      <em>или оставить текущие 8 фото и жать «Пролёт»</em>
     </label>
     <div class="toolbar">
       <button type="button" class="primary" id="btnPlay">Пролёт</button>
@@ -77,7 +77,14 @@
     <div class="film" id="film"></div>
   </main>
   <footer>Пролёт по кадрам объекта · <a href="./index.html">граф</a></footer>
-  <script src="./fly-photos.js"></script>
+  <script src="./fly/p01.js"></script>
+  <script src="./fly/p02.js"></script>
+  <script src="./fly/p03.js"></script>
+  <script src="./fly/p04.js"></script>
+  <script src="./fly/p05.js"></script>
+  <script src="./fly/p06.js"></script>
+  <script src="./fly/p07.js"></script>
+  <script src="./fly/p08.js"></script>
   <script>
     const filesInput=document.getElementById("files"),drop=document.getElementById("drop"),film=document.getElementById("film"),hud=document.getElementById("hud"),count=document.getElementById("count"),sec=document.getElementById("sec"),secVal=document.getElementById("secVal"),loop=document.getElementById("loop"),cv=document.getElementById("cv"),ctx=cv.getContext("2d"),W=cv.width,H=cv.height;
     let shots=[],idx=0,playing=false,raf=0,recorder=null;
