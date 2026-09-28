@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Фотофиксация — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <style>
+    :root { --bg:#070b14; --card:#0e1626; --line:#1c2a44; --text:#e8eefc; --mute:#8ea0c0; --acc:#5b9bd5; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font:15px/1.45 "Segoe UI",system-ui,sans-serif; }
+    .bg { position:fixed; inset:0; pointer-events:none; background: radial-gradient(900px 500px at 10% -10%, #16325a55, transparent 60%), radial-gradient(700px 400px at 100% 0%, #0c3d3a33, transparent 55%); }
+    .top { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#070b14cc; backdrop-filter:blur(12px); z-index:5; }
+    .brand { color:#fff; font-weight:700; letter-spacing:.08em; text-decoration:none; }
+    nav { display:flex; gap:18px; flex-wrap:wrap; }
+    nav a { color:var(--mute); text-decoration:none; font-size:13px; }
+    nav a.on, nav a:hover { color:#fff; }
+    main { max-width:1240px; margin:0 auto; padding:32px 20px 80px; position:relative; }
+    .kicker { color:var(--acc); text-transform:uppercase; letter-spacing:.16em; font-size:11px; margin:0; }
+    h1 { font-size:36px; margin:6px 0 10px; }
+    .lead { color:var(--mute); max-width:760px; }
+    .drop { margin:24px 0; background:var(--card); border:1px dashed var(--line); border-radius:16px; padding:28px; text-align:center; cursor:pointer; }
+    .drop:hover, .drop.over { border-color:var(--acc); }
+    .drop strong { display:block; font-size:18px; margin-bottom:6px; }
+    .drop em { color:var(--mute); font-style:normal; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0 20px; }
+    button { background:#10233f; color:#fff; border:1px solid #2b6cb0; border-radius:10px; padding:8px 14px; cursor:pointer; font:600 13px system-ui; }
+    button.primary { background:#7dd3fc; color:#070b14; border-color:#7dd3fc; }
+    button:disabled { opacity:.45; cursor:default; }
+    label.chk { color:var(--mute); font-size:13px; display:flex; gap:6px; align-items:center; }
+    input[type=range] { width:160px; }
+    .stage { background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden; position:relative; min-height:280px; display:grid; place-items:center; }
+    .stage img { max-width:100%; max-height:62vh; display:block; }
+    .hud { position:absolute; left:12px; bottom:12px; background:#070b14cc; border-radius:999px; padding:6px 12px; font:600 12px ui-monospace,monospace; color:#cfe4ff; }
+    .film { display:flex; gap:8px; overflow-x:auto; padding:14px 0; }
+    .shot { flex:0 0 110px; cursor:pointer; border:2px solid transparent; border-radius:10px; }
+    .shot.on { border-color:var(--acc); }
+    .shot img { width:110px; height:74px; object-fit:cover; border-radius:8px; display:block; }
+    .shot span { display:block; color:var(--mute); font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    footer { color:var(--mute); font-size:12px; padding:24px 20px; text-align:center; }
+    footer a { color:var(--acc); }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html">MiskHub</a>
+    <nav>
+      <a href="./index.html">Граф</a>
+      <a href="./akty.html">Акты об устранении</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+      <a class="on" href="./fotofiksaciya.html">Фотофиксация</a>
+    </nav>
+  </header>
+  <main>
+    <p class="kicker">Инструмент · пролёт дроном</p>
+    <h1>Фотофиксация</h1>
+    <p class="lead">Кидаешь кадры с объекта (обход, пикеты каждые 25 м, дрон). Сортирую по имени, собираю ленту и видео «пролёт» с лёгким наездом.</p>
+    <label class="drop" id="drop">
+      <input id="files" type="file" accept="image/*" multiple hidden />
+      <strong>Брось фото сюда или выбери файлы</strong>
+      <em>порядок = имя файла или номер пикета в названии</em>
+    </label>
+    <div class="toolbar">
+      <button type="button" id="btnPlay">Пролёт</button>
+      <button type="button" id="btnStop">Стоп</button>
+      <button type="button" class="primary" id="btnRec" disabled>Скачать видео</button>
+      <label class="chk">сек/кадр <input id="sec" type="range" min="0.4" max="3" step="0.1" value="1.2" /> <b id="secVal">1.2</b></label>
+      <label class="chk"><input id="loop" type="checkbox" checked /> зациклить</label>
+      <span class="kicker" id="count"></span>
+    </div>
+    <div class="stage" id="stage"><div class="hud" id="hud">нет кадров</div></div>
+    <div class="film" id="film"></div>
+  </main>
+  <footer>Кадры по порядку → видео вдоль трассы. <a href="./index.html">граф</a></footer>
+  <script>
+    const filesInput=document.getElementById("files"), drop=document.getElementById("drop"), film=document.getElementById("film"), stage=document.getElementById("stage"), hud=document.getElementById("hud"), count=document.getElementById("count"), sec=document.getElementById("sec"), secVal=document.getElementById("secVal"), loop=document.getElementById("loop");
+    let shots=[], idx=0, timer=null, recChunks=[], recorder=null;
+    function picketKey(name){const s=name.toLowerCase(); const pk=s.match(/пк\s*[-_]?(\d+)/)||s.match(/pk\s*[-_]?(\d+)/); const n=s.match(/(\d{1,5})/g); return [pk?Number(pk[1]):(n?Number(n[0]):0), name];}
+    function sortFiles(list){return [...list].sort((a,b)=>{const [na,sa]=picketKey(a.name),[nb,sb]=picketKey(b.name); return na-nb||sa.localeCompare(sb,"ru");});}
+    function show(i){if(!shots.length)return; idx=(i+shots.length)%shots.length; const s=shots[idx]; stage.querySelectorAll("img.view").forEach(el=>el.remove()); const img=document.createElement("img"); img.className="view"; img.src=s.url; img.alt=s.file.name; stage.appendChild(img); hud.textContent=(idx+1)+"/"+shots.length+" · "+s.file.name; [...film.children].forEach((el,n)=>el.classList.toggle("on",n===idx));}
+    function renderFilm(){film.innerHTML=""; shots.forEach((s,i)=>{const d=document.createElement("div"); d.className="shot"+(i===idx?" on":""); d.innerHTML='<img src="'+s.url+'" alt=""><span>'+s.file.name+'</span>'; d.onclick=()=>show(i); film.appendChild(d);}); count.textContent=shots.length?shots.length+" кадров":"";}
+    async function loadList(fileList){shots.forEach(s=>URL.revokeObjectURL(s.url)); const files=sortFiles([...fileList].filter(f=>f.type.startsWith("image/")||/\.(jpe?g|png|webp|heic|gif)$/i.test(f.name))); shots=files.map(file=>({file,url:URL.createObjectURL(file)})); idx=0; renderFilm(); if(shots.length){show(0); document.getElementById("btnRec").disabled=false;} else {hud.textContent="нет кадров"; document.getElementById("btnRec").disabled=true;}}
+    drop.addEventListener("click",()=>filesInput.click()); filesInput.addEventListener("change",e=>loadList(e.target.files));
+    ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault(); drop.classList.add("over");}));
+    ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault(); drop.classList.remove("over");}));
+    drop.addEventListener("drop",e=>loadList(e.dataTransfer.files));
+    sec.addEventListener("input",()=>{secVal.textContent=sec.value;});
+    function stop(){if(timer){clearInterval(timer); timer=null;}}
+    function play(){stop(); if(!shots.length)return; timer=setInterval(()=>{show(idx+1); if(!loop.checked&&idx===shots.length-1)stop();}, Number(sec.value)*1000);}
+    document.getElementById("btnPlay").onclick=play; document.getElementById("btnStop").onclick=stop;
+    async function record(){if(!shots.length)return; const btn=document.getElementById("btnRec"); btn.disabled=true; btn.textContent="Собираю…"; const w=1280,h=720,canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h; const ctx=canvas.getContext("2d"); const stream=canvas.captureStream(30); const mime=MediaRecorder.isTypeSupported("video/webm;codecs=vp9")?"video/webm;codecs=vp9":"video/webm"; recChunks=[]; recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:6000000}); recorder.ondataavailable=e=>{if(e.data.size)recChunks.push(e.data);}; const done=new Promise(res=>{recorder.onstop=res;}); recorder.start(); const hold=Number(sec.value); for(let i=0;i<shots.length;i++){show(i); const img=await new Promise((res,rej)=>{const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=shots[i].url;}); const frames=Math.max(8,Math.round(hold*30)); for(let f=0;f<frames;f++){const k=f/frames, zoom=1+0.08*k; ctx.fillStyle="#000"; ctx.fillRect(0,0,w,h); const scale=Math.max(w/img.width,h/img.height)*zoom, dw=img.width*scale, dh=img.height*scale; ctx.drawImage(img,(w-dw)/2,(h-dh)/2-12*k,dw,dh); ctx.fillStyle="rgba(7,11,20,0.55)"; ctx.fillRect(16,h-48,Math.min(w-32,520),32); ctx.fillStyle="#e8eefc"; ctx.font="16px ui-monospace,monospace"; ctx.fillText((i+1)+"/"+shots.length+"  "+shots[i].file.name,28,h-26); await new Promise(r=>requestAnimationFrame(r));}} recorder.stop(); await done; const blob=new Blob(recChunks,{type:"video/webm"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="prolet-dronom.webm"; a.click(); btn.disabled=false; btn.textContent="Скачать видео";}
+    document.getElementById("btnRec").onclick=record;
+  </script>
+</body>
+</html>
