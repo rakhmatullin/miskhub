@@ -1,1 +1,111 @@
-<placeholder>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Фотофиксация — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <style>
+    :root { --bg:#070b14; --card:#0e1626; --line:#1c2a44; --text:#e8eefc; --mute:#8ea0c0; --acc:#7dd3fc; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font:15px/1.45 "Segoe UI",system-ui,sans-serif; }
+    .bg { position:fixed; inset:0; pointer-events:none; background: radial-gradient(900px 500px at 10% -10%, #16325a55, transparent 60%), radial-gradient(700px 400px at 100% 0%, #0c3d3a33, transparent 55%); }
+    .top { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--line); position:sticky; top:0; background:#070b14cc; backdrop-filter:blur(12px); z-index:5; }
+    .brand { color:#fff; font-weight:700; letter-spacing:.08em; text-decoration:none; }
+    nav { display:flex; gap:18px; flex-wrap:wrap; }
+    nav a { color:var(--mute); text-decoration:none; font-size:13px; }
+    nav a.on, nav a:hover { color:#fff; }
+    main { max-width:1240px; margin:0 auto; padding:28px 20px 80px; position:relative; }
+    .kicker { color:var(--acc); text-transform:uppercase; letter-spacing:.16em; font-size:11px; margin:0; }
+    h1 { font-size:36px; margin:6px 0 10px; }
+    .lead { color:var(--mute); max-width:760px; margin:0 0 22px; }
+    .drop { display:block; margin:0 0 16px; background:var(--card); border:1px dashed var(--line); border-radius:16px; padding:20px; text-align:center; cursor:pointer; }
+    .drop:hover, .drop.over { border-color:var(--acc); }
+    .drop strong { display:block; font-size:16px; margin-bottom:4px; }
+    .drop em { color:var(--mute); font-style:normal; font-size:13px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 16px; }
+    button { background:#10233f; color:#fff; border:1px solid #2b6cb0; border-radius:10px; padding:8px 14px; cursor:pointer; font:600 13px system-ui; }
+    button.primary { background:#7dd3fc; color:#070b14; border-color:#7dd3fc; }
+    button:disabled { opacity:.45; cursor:default; }
+    label.chk { color:var(--mute); font-size:13px; display:flex; gap:6px; align-items:center; }
+    input[type=range] { width:140px; }
+    .stage { background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden; position:relative; aspect-ratio:16/9; }
+    .stage canvas { width:100%; height:100%; display:block; }
+    .hud { position:absolute; left:12px; bottom:12px; background:#070b14cc; border-radius:999px; padding:6px 12px; font:600 12px ui-monospace,monospace; color:#cfe4ff; pointer-events:none; }
+    .film { display:flex; gap:8px; overflow-x:auto; padding:14px 0; }
+    .shot { flex:0 0 132px; cursor:pointer; border:2px solid transparent; border-radius:10px; }
+    .shot.on { border-color:var(--acc); }
+    .shot img { width:128px; height:80px; object-fit:cover; border-radius:8px; display:block; }
+    .shot span { display:block; color:var(--mute); font-size:11px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    footer { color:var(--mute); font-size:12px; padding:24px 20px; text-align:center; }
+    footer a { color:var(--acc); }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html">MiskHub</a>
+    <nav>
+      <a href="./index.html">Граф</a>
+      <a href="./akty.html">Акты об устранении</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+      <a class="on" href="./fotofiksaciya.html">Фотофиксация</a>
+    </nav>
+  </header>
+  <main>
+    <p class="kicker">Инструмент · пролёт дроном</p>
+    <h1>Фотофиксация</h1>
+    <p class="lead">Те же кадры с объекта уже в ленте. «Пролёт» — наезд и смещение камеры по трассе забора. Можно докинуть свои фото.</p>
+    <label class="drop" id="drop">
+      <input id="files" type="file" accept="image/*" multiple hidden />
+      <strong>Добавить свои кадры</strong>
+      <em>или оставить текущие 8 фото объекта и сразу жать «Пролёт»</em>
+    </label>
+    <div class="toolbar">
+      <button type="button" class="primary" id="btnPlay">Пролёт</button>
+      <button type="button" id="btnStop">Стоп</button>
+      <button type="button" id="btnRec">Скачать видео</button>
+      <button type="button" id="btnReset">Вернуть исходные</button>
+      <label class="chk">сек/кадр <input id="sec" type="range" min="0.8" max="3.5" step="0.1" value="2.0" /> <b id="secVal">2.0</b></label>
+      <label class="chk"><input id="loop" type="checkbox" checked /> зациклить</label>
+      <span class="kicker" id="count"></span>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="cv" width="1280" height="720"></canvas>
+      <div class="hud" id="hud">загрузка кадров…</div>
+    </div>
+    <div class="film" id="film"></div>
+  </main>
+  <footer>Пролёт по кадрам объекта · <a href="./index.html">граф</a></footer>
+  <script src="./fly-photos.js"></script>
+  <script>
+    const filesInput=document.getElementById("files"),drop=document.getElementById("drop"),film=document.getElementById("film"),hud=document.getElementById("hud"),count=document.getElementById("count"),sec=document.getElementById("sec"),secVal=document.getElementById("secVal"),loop=document.getElementById("loop"),cv=document.getElementById("cv"),ctx=cv.getContext("2d"),W=cv.width,H=cv.height;
+    let shots=[],idx=0,playing=false,raf=0,recorder=null;
+    function ease(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+    function coverDraw(img,zoom,panX,panY,alpha){if(!img||!img.width)return;const scale=Math.max(W/img.width,H/img.height)*zoom,dw=img.width*scale,dh=img.height*scale;ctx.save();ctx.globalAlpha=alpha;ctx.drawImage(img,(W-dw)/2+panX,(H-dh)/2+panY,dw,dh);ctx.restore();}
+    function motion(i,k){const dir=i%2===0?1:-1;return{zoom:1.04+0.16*k,panX:dir*36*k,panY:-18*k};}
+    function drawFrame(i,k,fade){ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);const cur=shots[i];if(!cur||!cur.img)return;const m=motion(i,k);coverDraw(cur.img,m.zoom,m.panX,m.panY,1);if(fade>0&&shots.length>1){const n=(i+1)%shots.length,nxt=shots[n];if(nxt&&nxt.img){const m2=motion(n,0);coverDraw(nxt.img,m2.zoom,m2.panX,m2.panY,fade);}}ctx.fillStyle="rgba(7,11,20,0.55)";ctx.fillRect(16,H-56,Math.min(W-32,640),40);ctx.fillStyle="#e8eefc";ctx.font="16px ui-monospace,monospace";ctx.fillText((i+1)+"/"+shots.length+"  "+(cur.title||cur.name||""),28,H-30);}
+    function showStill(i){if(!shots.length)return;idx=(i+shots.length)%shots.length;drawFrame(idx,0,0);hud.textContent=(idx+1)+"/"+shots.length+" · "+(shots[idx].title||shots[idx].name);[...film.children].forEach((el,n)=>el.classList.toggle("on",n===idx));}
+    function renderFilm(){film.innerHTML="";shots.forEach((s,i)=>{const d=document.createElement("div");d.className="shot"+(i===idx?" on":"");const img=document.createElement("img");img.src=s.url;const span=document.createElement("span");span.textContent=s.title||s.name;d.appendChild(img);d.appendChild(span);d.onclick=()=>{stop();showStill(i);};film.appendChild(d);});count.textContent=shots.length?shots.length+" кадров":"";}
+    function loadImage(url){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=url;});}
+    async function setShots(list){stop();shots.forEach(s=>{if(s.revoke)URL.revokeObjectURL(s.url);});shots=[];for(const item of list){try{shots.push({...item,img:await loadImage(item.url)});}catch(e){console.warn("skip",item.name,e);}}idx=0;renderFilm();if(shots.length)showStill(0);else{hud.textContent="нет кадров";ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);}}
+    async function loadBuiltIn(){const pack=window.MISK_FLY_PHOTOS||[];if(!pack.length){hud.textContent="нет встроенных кадров — кинь фото";return;}await setShots(pack.map(p=>({url:p.data,name:p.srcName,title:p.title,revoke:false})));}
+    function picketKey(name){const s=(name||"").toLowerCase();const pk=s.match(/пк\s*[-_]?(\d+)/)||s.match(/pk\s*[-_]?(\d+)/);const n=s.match(/(\d{1,5})/g);return[pk?Number(pk[1]):(n?Number(n[0]):0),name];}
+    async function loadList(fileList){const files=[...fileList].filter(f=>f.type.startsWith("image/")||/\.(jpe?g|png|webp|heic|gif)$/i.test(f.name));files.sort((a,b)=>{const[na,sa]=picketKey(a.name),[nb,sb]=picketKey(b.name);return na-nb||sa.localeCompare(sb,"ru");});const extra=files.map(file=>({url:URL.createObjectURL(file),name:file.name,title:file.name,revoke:true}));const keep=shots.map(s=>({url:s.url,name:s.name,title:s.title,revoke:s.revoke}));await setShots(keep.concat(extra));}
+    drop.addEventListener("click",()=>filesInput.click());
+    filesInput.addEventListener("change",e=>loadList(e.target.files));
+    ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+    ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+    drop.addEventListener("drop",e=>loadList(e.dataTransfer.files));
+    sec.addEventListener("input",()=>{secVal.textContent=sec.value;});
+    function stop(){playing=false;if(raf)cancelAnimationFrame(raf);raf=0;if(recorder&&recorder.state==="recording")recorder.stop();}
+    function play(fromStart){if(!shots.length)return;if(fromStart)idx=0;playing=true;const t0=performance.now();const hold=Number(sec.value)*1000;const fadeMs=Math.min(420,hold*0.22);const tick=(now)=>{if(!playing)return;let local=now-t0,i=idx;while(local>hold){local-=hold;i+=1;if(i>=shots.length){if(loop.checked)i=0;else{idx=shots.length-1;showStill(idx);playing=false;return;}}}idx=i;const k=ease(Math.min(1,local/hold));const fade=local>hold-fadeMs?(local-(hold-fadeMs))/fadeMs:0;drawFrame(i,k,fade);hud.textContent=(i+1)+"/"+shots.length+" · "+(shots[i].title||shots[i].name);[...film.children].forEach((el,n)=>el.classList.toggle("on",n===i));raf=requestAnimationFrame(tick);};raf=requestAnimationFrame(tick);}
+    document.getElementById("btnPlay").onclick=()=>{stop();play(true);};
+    document.getElementById("btnStop").onclick=()=>{stop();showStill(idx);};
+    document.getElementById("btnReset").onclick=()=>loadBuiltIn();
+    async function record(){if(!shots.length)return;const btn=document.getElementById("btnRec");btn.disabled=true;btn.textContent="Пишу…";const stream=cv.captureStream(30);const mime=MediaRecorder.isTypeSupported("video/webm;codecs=vp9")?"video/webm;codecs=vp9":(MediaRecorder.isTypeSupported("video/webm;codecs=vp8")?"video/webm;codecs=vp8":"video/webm");const chunks=[];recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:4500000});recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};const done=new Promise(res=>{recorder.onstop=res;});const prevLoop=loop.checked;loop.checked=false;recorder.start(200);play(true);await new Promise(res=>{const check=()=>{if(!playing)res();else setTimeout(check,120);};check();});if(recorder.state==="recording")recorder.stop();await done;loop.checked=prevLoop;const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(chunks,{type:"video/webm"}));a.download="prolet-dronom.webm";a.click();btn.disabled=false;btn.textContent="Скачать видео";}
+    document.getElementById("btnRec").onclick=record;
+    loadBuiltIn().then(()=>setTimeout(()=>play(true),400));
+  </script>
+</body>
+</html>
