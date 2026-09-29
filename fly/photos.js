@@ -1,0 +1,1 @@
+window.MISK_FLY_PHOTOS=window.MISK_FLY_PHOTOS||[];
