@@ -1,1 +1,0 @@
-window.MISK_FLY_PHOTOS=window.MISK_FLY_PHOTOS||[];window.MISK_FLY_PHOTOS.push({"srcName":"IMG_4908.jpg","title":"Белая застройка, вид на Сити · 55.70261, 37.69656","lat":55.702606,"lon":37.696564,"data":"data:image/jpeg;base64,PLACEHOLDER"});
