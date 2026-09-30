@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Устранение замечаний — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="stylesheet" href="./akty.css?v=30" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .dot{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 11px/1 sans-serif}
+    .dot.x{background:#ea9999;color:#5B1A1A}
+    .dot.in_progress{background:#fff2cc;color:#6B5A00}
+    .dot.question{background:#ffe599;color:#6B5A00}
+    .dot.sent_albert{background:#666;color:#fff}
+    .dot.shoot{background:#b4a7d6;color:#2C2150}
+    .slot-tools{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+    .bar{height:5px;background:#1c2a44;border-radius:99px;overflow:hidden;margin-top:6px}
+    .bar>i{display:block;height:100%;width:0;background:#5b9bd5}
+    details.arch{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+    .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:12px;z-index:30}
+    .modal.on{display:flex}
+    .modal .box{background:#0e1626;border:1px solid #1c2a44;border-radius:16px;max-width:860px;width:100%;max-height:92vh;overflow:auto;padding:16px}
+    .slots2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:700px){.slots2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html">MiskHub</a>
+    <nav>
+      <a href="./index.html">Граф</a>
+      <a class="on" href="./ustranenie.html">Устранение замечаний</a>
+      <a href="./akty.html">Акты об устранении</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+      <a href="./fotofiksaciya.html">Фотофиксация</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">Версия 2.0 · живой реестр</p>
+      <h1>Устранение замечаний</h1>
+      <p class="lead">Выгрузка обновляет таблицу. Закрытые не удаляются — уходят в скрывашку. Фото крутятся до записи. Статусы команды отдельно от колонки «Статус».</p>
+    </section>
+    <section class="toolbar">
+      <label class="btn-file">Загрузить выгрузку<input id="dumpFile" type="file" accept=".xlsx,.xls" hidden></label>
+      <input type="search" id="q" placeholder="поиск № / локация / комментарий" />
+      <span class="kicker" id="hint"></span>
+    </section>
+    <div id="diffBox"></div>
+    <section class="stats" id="stats">
+      <div><b id="nLive">0</b><span>живых</span></div>
+      <div><b id="nArch">0</b><span>в архиве</span></div>
+      <div><b id="nFoto">0</b><span>с фото ДО</span></div>
+    </section>
+    <section id="tableWrap"></section>
+    <details class="arch" id="archBox">
+      <summary>Закрытые и удалённые <span id="archN"></span></summary>
+      <div id="archWrap"></div>
+    </details>
+  </main>
+  <div class="modal" id="modal"><div class="box" id="card"></div></div>
+  <script src="./ustranenie.js?v=30"></script>
+  <script src="./hub-nav.js"></script>
+</body>
+</html>

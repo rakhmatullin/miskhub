@@ -1,6 +1,7 @@
 (function () {
   var items = [
     { href: "/miskhub/", match: /(index\.html)?$/, label: "Граф" },
+    { href: "/miskhub/ustranenie.html", match: /ustranenie/, label: "Устранение замечаний" },
     { href: "/miskhub/akty.html", match: /akty/, label: "Акты об устранении" },
     { href: "/miskhub/sverka-vesov.html", match: /sverka/, label: "Сверка весов" },
     { href: "/miskhub/fotofiksaciya.html", match: /fotofiks/, label: "Фотофиксация" }
@@ -16,10 +17,6 @@
     var links = nav.querySelectorAll("a");
     if (!links.length) return false;
     var sample = links[links.length - 1];
-    links.forEach(function (a) {
-      var t = (a.textContent || "") + " " + (a.getAttribute("href") || "");
-      if (/устранен/i.test(t) && !/акты об устранен/i.test(t)) a.remove();
-    });
     items.forEach(function (it) {
       var exists = false;
       nav.querySelectorAll("a").forEach(function (a) {
