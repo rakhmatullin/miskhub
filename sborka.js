@@ -130,6 +130,104 @@ async function lookup(n) {
     can_build: !block, block,
   };
 }
+
+const COMMENTS_FILE = "комментарии.json";
+let comments = {};
+let openRows = [];
+let dumpDate = "";
+
+async function loadComments() {
+  comments = {};
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, COMMENTS_FILE);
+    if (!f) return;
+    comments = JSON.parse(await f.text()) || {};
+  } catch (_) { comments = {}; }
+}
+async function saveComments() {
+  if (!dirHandle) return;
+  const fh = await dirHandle.getFileHandle(COMMENTS_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(comments, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+let commentTimers = {};
+function scheduleComment(n, value) {
+  comments[String(n)] = value;
+  clearTimeout(commentTimers[n]);
+  commentTimers[n] = setTimeout(() => saveComments().catch(() => {}), 400);
+}
+async function savePhoto(n, slot, file) {
+  const jpeg = await toJpeg(file);
+  const name = n + "_" + slot + ".jpg";
+  const entries = await listEntries();
+  const old = findPhotoEntry(entries, n, slot);
+  if (old && old.name !== name) {
+    try { await dirHandle.removeEntry(old.name); } catch (_) {}
+  }
+  const fh = await dirHandle.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(jpeg.bytes);
+  await w.close();
+}
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+async function loadOpen() {
+  openRows = []; dumpDate = "";
+  if (!dirHandle) return;
+  const entries = await listEntries();
+  const dump = await fileByName(entries, "выгрузка.xlsx");
+  if (!dump) return;
+  dumpDate = todayStrFrom(dump.lastModified);
+  try { openRows = parseDump(await dump.arrayBuffer()).filter((r) => r.status === "К устранению"); }
+  catch (_) { openRows = []; }
+  await loadComments();
+}
+function todayStrFrom(ms) {
+  const d = new Date(ms);
+  return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
+}
+function renderOpen() {
+  const host = $("open");
+  if (!host) return;
+  if (!dirHandle) { host.innerHTML = ""; return; }
+  if (!openRows.length) {
+    host.innerHTML = '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты</strong><span class="kicker">' +
+      (dumpDate ? "выгрузка от " + dumpDate : "нет выгрузки") + '</span></div><p class="kicker">Нет строк «К устранению».</p></section>';
+    return;
+  }
+  let rows = "";
+  openRows.forEach((r) => {
+    const c = comments[String(r.act_no)] || "";
+    rows += "<tr>" +
+      '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
+      "<td>" + esc(r.pred_date || "—") + "</td>" +
+      "<td>" + esc(r.deadline || "—") + "</td>" +
+      '<td class="desc">' + esc(r.description || "—") + "</td>" +
+      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" rows="2">' + esc(c) + "</textarea></td>" +
+      "</tr>";
+  });
+  host.innerHTML =
+    '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
+    '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
+    '<table class="table"><thead><tr><th>Номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Комментарий</th></tr></thead><tbody>' +
+    rows + "</tbody></table></section>";
+  host.querySelectorAll("[data-cmt]").forEach((el) => {
+    el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.value));
+  });
+  host.querySelectorAll("[data-go]").forEach((el) => {
+    el.addEventListener("click", () => {
+      $("num").value = el.dataset.go;
+      $("num").dispatchEvent(new Event("input"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
 function render(d) {
   if (!d.ok) {
     ready = false; $("go").disabled = true; $("hint").textContent = "";
@@ -149,9 +247,18 @@ function render(d) {
     '<div><span class="k">Дата акта</span>' + d.act_date + "</div>" +
     '<div><span class="k">Замечание</span>' + (a.description || "—") + "</div></div></section>" +
     '<section class="tape-wrap"><div class="photos">' +
-    "<figure>" + (d.beforeUrl ? '<img src="' + d.beforeUrl + '">' : "<img>") + "<figcaption class=\"kicker\">" + (d.before ? "до · " + d.before : "нет файла " + a.act_no + "_1") + "</figcaption></figure>" +
-    "<figure>" + (d.afterUrl ? '<img src="' + d.afterUrl + '">' : "<img>") + "<figcaption class=\"kicker\">" + (d.after ? "после · " + d.after : "нет файла " + a.act_no + "_2") + "</figcaption></figure>" +
+    slotHtml(a.act_no, 1, "до", d.before, d.beforeUrl) +
+    slotHtml(a.act_no, 2, "после", d.after, d.afterUrl) +
     "</div></section>";
+}
+
+function slotHtml(n, slot, label, name, url) {
+  const img = url
+    ? '<img src="' + url + '" alt="">'
+    : '<div class="ph">Добавить фото ' + label + '</div>';
+  const btn = url ? '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">Заменить</button>' : "";
+  return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img + btn +
+    '<figcaption class="kicker">' + label + " · " + (name || "нет " + n + "_" + slot) + "</figcaption></figure>";
 }
 async function toJpeg(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -306,6 +413,8 @@ async function restoreFolder() {
     dirHandle = handle;
     $("folder").textContent = dirHandle.name;
     await refreshFiles();
+    await loadOpen();
+    renderOpen();
   } catch (_) {}
 }
 $("pick").addEventListener("click", () => pickFolder().catch((e) => {
@@ -317,6 +426,7 @@ $("num").addEventListener("input", () => {
     const n = Number($("num").value);
     if (!n || !dirHandle) { $("out").innerHTML = ""; $("go").disabled = true; return; }
     render(await lookup(n));
+    wireSlots();
   }, 200);
 });
 $("go").addEventListener("click", async () => {
@@ -335,4 +445,34 @@ $("go").addEventListener("click", async () => {
 if (typeof window.showDirectoryPicker !== "function") {
   $("out").innerHTML = '<div class="msg bad">Нужен Chrome или Edge. В этом браузере папку выбрать нельзя.</div>';
 }
-restoreFolder();
+restoreFolder().then(() => loadOpen().then(renderOpen));
+
+function wireSlots() {
+  document.querySelectorAll("[data-pick]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const [n, slot] = el.dataset.pick.split(":");
+      const inp = $("photoIn");
+      inp.dataset.n = n;
+      inp.dataset.slot = slot;
+      inp.value = "";
+      inp.click();
+    });
+  });
+}
+$("photoIn").addEventListener("change", async () => {
+  const file = $("photoIn").files && $("photoIn").files[0];
+  if (!file) return;
+  const n = Number($("photoIn").dataset.n);
+  const slot = Number($("photoIn").dataset.slot);
+  $("hint").textContent = "Сохраняю фото…";
+  try {
+    await savePhoto(n, slot, file);
+    render(await lookup(n));
+    wireSlots();
+    $("hint").textContent = "Фото сохранено: " + n + "_" + slot + ".jpg";
+  } catch (e) {
+    $("hint").textContent = "";
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + (e.message || "Не удалось сохранить фото.") + "</div>");
+  }
+});
