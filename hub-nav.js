@@ -3,7 +3,6 @@
     { href: "/miskhub/", match: /(index\.html)?$/, label: "Граф" },
     { href: "/miskhub/sborka.html", match: /sborka/, label: "Сборка актов" },
     { href: "/miskhub/sverka-vesov.html", match: /sverka/, label: "Сверка весов" },
-    { href: "/miskhub/fotofiksaciya.html", match: /fotofiks/, label: "Фотофиксация" }
   ];
   function abs(href) {
     try { return new URL(href, location.origin).pathname.replace(/\/+$/, "") || "/"; }
