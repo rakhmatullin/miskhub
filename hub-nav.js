@@ -1,5 +1,5 @@
 (function () {
-  var LOGO = "/miskhub/assets/logo.svg";
+  var LOGO = "/miskhub/assets/favicon.svg";
   function styleBrand(a) {
     if (!a || a.dataset.branded) return;
     a.dataset.branded = "1";
