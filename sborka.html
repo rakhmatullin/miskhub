@@ -24,6 +24,24 @@
     .pill.ok { background: #14331f; color: var(--ok); }
     .pill.bad { background: #3a1820; color: var(--bad); }
     @media (max-width: 700px) { .photos { grid-template-columns: 1fr; } }
+    .slot { position: relative; cursor: pointer; }
+    .slot .ph {
+      width: 100%; height: 200px; border-radius: 12px; border: 1px dashed var(--line);
+      background: #09111e; display: grid; place-items: center; color: var(--mute); font-size: 13px;
+    }
+    .slot .chg {
+      position: absolute; right: 8px; bottom: 28px; background: #000c; color: #fff;
+      border: 0; border-radius: 8px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    .open-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 6px 0 10px; }
+    .open-head .kicker { margin: 0; }
+    .cmt {
+      width: 100%; min-width: 140px; background: #09111e; color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; resize: vertical;
+    }
+    .table .num { cursor: pointer; color: var(--acc); }
+    .table .num:hover { text-decoration: underline; }
+
   </style>
 </head>
 <body>
@@ -51,12 +69,14 @@
       </div>
     </section>
     <div id="out"></div>
+    <div id="open"></div>
+  <input id="photoIn" type="file" accept="image/*" hidden>
   </main>
   <footer>
     <span>Шаблон встроен. В папке нужна выгрузка.xlsx. Фото 123_1 и 123_2 необязательны. Firefox и Safari папку так не отдают.</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
-  <script src="./sborka.js?v=4"></script>
+  <script src="./sborka.js?v=7"></script>
   <script src="./hub-nav.js?v=6"></script>
 </body>
 </html>
