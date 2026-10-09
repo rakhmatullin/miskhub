@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Сборка акта — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="stylesheet" href="./akty.css?v=sborka1" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .numbox { width: 100%; font-size: 32px; padding: 10px 12px; background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+    .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .photos img { width: 100%; height: 200px; object-fit: cover; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
+    .meta div { padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .meta div:last-child { border-bottom: 0; }
+    .k { color: var(--mute); display: inline-block; width: 168px; }
+    .msg { padding: 12px 14px; border-radius: 10px; margin-bottom: 12px; }
+    .msg.ok { background: #14331f; color: var(--ok); }
+    .msg.bad { background: #3a1820; color: var(--bad); }
+    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #152238; color: var(--mute); margin-right: 6px; }
+    .pill.ok { background: #14331f; color: var(--ok); }
+    .pill.bad { background: #3a1820; color: var(--bad); }
+    @media (max-width: 700px) { .photos { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html">MiskHub</a>
+    <nav>
+      <a href="./index.html">Граф</a>
+      <a href="./ustranenie.html">Устранение замечаний</a>
+      <a href="./akty.html">Акты об устранении</a>
+      <a class="on" href="./sborka.html">Сборка акта</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+      <a href="./fotofiksaciya.html">Фотофиксация</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">GitHub Pages · Chrome или Edge</p>
+      <h1>Сборка акта</h1>
+      <p class="lead">Выбери папку один раз. Введи номер. Дата акта — сегодня. Файл сохранится в ту же папку: <code>Акт об Устранении №123+.docx</code>.</p>
+    </section>
+    <div id="files" style="margin:12px 0"></div>
+    <section class="toolbar">
+      <button type="button" id="pick">Выбрать папку</button>
+      <span class="kicker" id="folder">Папка не выбрана</span>
+    </section>
+    <section class="tape-wrap">
+      <label class="kicker" for="num">Номер акта</label>
+      <input id="num" class="numbox" type="number" min="1" step="1" placeholder="123" disabled>
+      <div class="toolbar" style="margin-top:12px">
+        <button type="button" class="primary" id="go" disabled>Сформировать акт</button>
+        <span class="kicker" id="hint"></span>
+      </div>
+    </section>
+    <div id="out"></div>
+  </main>
+  <footer>
+    <span>Шаблон встроен. В папке нужны выгрузка.xlsx и фото 123_1 / 123_2. Firefox и Safari папку так не отдают.</span>
+    <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
+  </footer>
+  <script src="./sborka.js?v=sborka1"></script>
+  <script src="./hub-nav.js"></script>
+</body>
+</html>

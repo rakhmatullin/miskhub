@@ -7,6 +7,7 @@
 - Граф: https://rakhmatullin.github.io/miskhub/
 - Устранение замечаний 2.0: https://rakhmatullin.github.io/miskhub/ustranenie.html
 - Акты об устранении: https://rakhmatullin.github.io/miskhub/akty.html
+- Сборка акта: https://rakhmatullin.github.io/miskhub/sborka.html
 - Сверка весов: https://rakhmatullin.github.io/miskhub/sverka-vesov.html
 - Фотофиксация: https://rakhmatullin.github.io/miskhub/fotofiksaciya.html
 
@@ -21,3 +22,7 @@
 5. Карточка акта — локация, комментарий, слоты фото.
 
 Сборка Word-пакета по-прежнему в инструменте «Акты об устранении».
+
+## Сборка акта
+
+Страница на GitHub Pages. Chrome или Edge. Выбрать папку, ввести номер, акт сохраняется рядом. Шаблон встроен.

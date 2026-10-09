@@ -2,7 +2,8 @@
   var items = [
     { href: "/miskhub/", match: /(index\.html)?$/, label: "Граф" },
     { href: "/miskhub/ustranenie.html", match: /ustranenie/, label: "Устранение замечаний" },
-    { href: "/miskhub/akty.html", match: /akty/, label: "Акты об устранении" },
+    { href: "/miskhub/akty.html", match: /akty\.html/, label: "Акты об устранении" },
+    { href: "/miskhub/sborka.html", match: /sborka/, label: "Сборка акта" },
     { href: "/miskhub/sverka-vesov.html", match: /sverka/, label: "Сверка весов" },
     { href: "/miskhub/fotofiksaciya.html", match: /fotofiks/, label: "Фотофиксация" }
   ];
