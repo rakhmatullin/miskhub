@@ -1,7 +1,7 @@
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-const CX = 5900000;
+const CX = 5240000;
 const TPL_URL = "./shablon-akt.b64";
 
 const $ = (id) => document.getElementById(id);
@@ -162,7 +162,7 @@ async function toJpeg(file) {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), w: bmp.width, h: bmp.height };
 }
 function drawingXml(rid, docId, name, cx, cy) {
-  return '<w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  return '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
     '<wp:extent cx="' + cx + '" cy="' + cy + '"/>' +
     '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
     '<wp:docPr id="' + docId + '" name="' + name + '"/>' +
