@@ -1,7 +1,7 @@
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-const CX = 6120130;
+const CX = 5900000;
 const TPL_URL = "./shablon-akt.b64";
 
 const $ = (id) => document.getElementById(id);
@@ -122,7 +122,6 @@ async function lookup(n) {
   else if (!act.pred_date) block = "В строке нет даты предписания.";
   else if (!act.deadline) block = "В строке нет срока устранения.";
   else if (!act.description) block = "В строке нет текста замечания.";
-  else if (!before || !after) block = "Нужны оба фото: " + n + "_1 и " + n + "_2.";
   return {
     ok: true, act, act_date: todayStr(),
     before: before ? before.name : null, after: after ? after.name : null,
@@ -163,7 +162,7 @@ async function toJpeg(file) {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), w: bmp.width, h: bmp.height };
 }
 function drawingXml(rid, docId, name, cx, cy) {
-  return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  return '<w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
     '<wp:extent cx="' + cx + '" cy="' + cy + '"/>' +
     '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
     '<wp:docPr id="' + docId + '" name="' + name + '"/>' +
@@ -175,7 +174,7 @@ function drawingXml(rid, docId, name, cx, cy) {
     "</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>";
 }
 function appXml() {
-  return '<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
+  return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
 }
 function ensureRel(rels, rid, target) {
   if (rels.includes('Id="' + rid + '"')) {
@@ -212,20 +211,27 @@ async function buildAct({ templateBuf, actNo, actDate, predDate, deadline, descr
   if (!xml.includes("xmlns:a=")) {
     xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
   }
-  const before = await toJpeg(beforeFile);
-  const after = await toJpeg(afterFile);
-  zip.file("word/media/image3.jpg", before.bytes);
-  zip.file("word/media/image4.jpg", after.bytes);
-  const photos =
-    drawingXml("rId13", 20, "foto_do", CX, Math.round(CX * before.h / before.w)) +
-    drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w)) +
-    appXml();
+  let photos = "";
+  let relsExtra = "";
+  if (beforeFile) {
+    const before = await toJpeg(beforeFile);
+    zip.file("word/media/image3.jpg", before.bytes);
+    photos += drawingXml("rId13", 20, "foto_do", CX, Math.round(CX * before.h / before.w));
+    relsExtra += "rId13 ";
+  }
+  if (afterFile) {
+    const after = await toJpeg(afterFile);
+    zip.file("word/media/image4.jpg", after.bytes);
+    photos += drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w));
+    relsExtra += "rId14 ";
+  }
+  if (photos) photos = appXml() + photos;
   if (!xml.includes("<w:sectPr")) throw new Error("В шаблоне нет раздела страницы.");
   xml = xml.replace("<w:sectPr", photos + "<w:sectPr");
   zip.file("word/document.xml", xml);
   let rels = await zip.file("word/_rels/document.xml.rels").async("string");
-  rels = ensureRel(rels, "rId13", "media/image3.jpg");
-  rels = ensureRel(rels, "rId14", "media/image4.jpg");
+  if (beforeFile) rels = ensureRel(rels, "rId13", "media/image3.jpg");
+  if (afterFile) rels = ensureRel(rels, "rId14", "media/image4.jpg");
   zip.file("word/_rels/document.xml.rels", rels);
   let ct = await zip.file("[Content_Types].xml").async("string");
   if (!/Extension="jpe?g"/i.test(ct)) {
@@ -234,7 +240,7 @@ async function buildAct({ templateBuf, actNo, actDate, predDate, deadline, descr
   zip.file("[Content_Types].xml", ct);
   return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
-function actName(n) { return "Акт об Устранении №" + n + "+.docx"; }
+function actName(n) { return "Акт об Устранении №" + n + ".docx"; }
 async function saveAct(n) {
   const info = await lookup(n);
   if (!info.ok) throw new Error(info.error);
@@ -251,8 +257,8 @@ async function saveAct(n) {
     predDate: info.act.pred_date,
     deadline: info.act.deadline,
     description: info.act.description,
-    beforeFile: await before.handle.getFile(),
-    afterFile: await after.handle.getFile(),
+    beforeFile: before ? await before.handle.getFile() : null,
+    afterFile: after ? await after.handle.getFile() : null,
   });
   const fh = await dirHandle.getFileHandle(actName(n), { create: true });
   const w = await fh.createWritable();
