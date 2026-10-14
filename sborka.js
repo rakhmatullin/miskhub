@@ -205,6 +205,7 @@ function renderOpen() {
     const c = comments[String(r.act_no)] || "";
     rows += "<tr>" +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
+      '<td>' + esc(r.integration || "—") + "</td>" +
       "<td>" + esc(r.pred_date || "—") + "</td>" +
       "<td>" + esc(r.deadline || "—") + "</td>" +
       '<td class="desc">' + esc(r.description || "—") + "</td>" +
@@ -214,7 +215,7 @@ function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th>Номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Комментарий</th></tr></thead><tbody>' +
+    '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Комментарий</th></tr></thead><tbody>' +
     rows + "</tbody></table></section>";
   host.querySelectorAll("[data-cmt]").forEach((el) => {
     el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.value));
@@ -240,7 +241,8 @@ function render(d) {
   const a = d.act;
   $("out").innerHTML =
     '<section class="tape-wrap"><div class="meta">' +
-    '<div><span class="k">Номер</span>' + a.act_no + (a.integration ? ' <span class="kicker">интеграционный ' + a.integration + ", в акт не идёт</span>" : "") + "</div>" +
+    '<div><span class="k">Номер</span>' + a.act_no + "</div>" +
+    '<div><span class="k">Инт.номер</span>' + (a.integration || "—") + "</div>" +
     '<div><span class="k">Статус</span>' + (a.status || "—") + "</div>" +
     '<div><span class="k">Дата предписания</span>' + (a.pred_date || "—") + "</div>" +
     '<div><span class="k">Срок</span>' + (a.deadline || "—") + "</div>" +
@@ -291,11 +293,12 @@ function ensureRel(rels, rid, target) {
   return rels.replace("</Relationships>",
     '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + target + '"/></Relationships>');
 }
-async function buildAct({ templateBuf, actNo, actDate, predDate, deadline, description, beforeFile, afterFile }) {
+async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, beforeFile, afterFile }) {
   const zip = await JSZip.loadAsync(templateBuf);
   let xml = await zip.file("word/document.xml").async("string");
+  const useNo = (integration || "").trim() || String(actNo);
   const map = {
-    "{{НОМЕР-АКТА}}": String(actNo),
+    "{{НОМЕР-АКТА}}": useNo,
     "{{ДАТА-АКТА-ТЕКСТ}}": ruQuoted(actDate),
     "{{ДАТА-ПРЕДПИСАНИЯ-ТЕКСТ}}": ruQuoted(predDate) + "г.",
     "{{ОПИСАНИЕ}}": xmlEscape(description),
@@ -347,7 +350,10 @@ async function buildAct({ templateBuf, actNo, actDate, predDate, deadline, descr
   zip.file("[Content_Types].xml", ct);
   return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
-function actName(n) { return "Акт об Устранении №" + n + ".docx"; }
+function actName(n, integration) {
+  const use = (integration || "").trim() || String(n);
+  return "Акт об Устранении №" + use + ".docx";
+}
 async function saveAct(n) {
   const info = await lookup(n);
   if (!info.ok) throw new Error(info.error);
@@ -360,6 +366,7 @@ async function saveAct(n) {
   const blob = await buildAct({
     templateBuf,
     actNo: n,
+    integration: info.act.integration,
     actDate: info.act_date,
     predDate: info.act.pred_date,
     deadline: info.act.deadline,
@@ -367,11 +374,12 @@ async function saveAct(n) {
     beforeFile: before ? await before.handle.getFile() : null,
     afterFile: after ? await after.handle.getFile() : null,
   });
-  const fh = await dirHandle.getFileHandle(actName(n), { create: true });
+  const name = actName(n, info.act.integration);
+  const fh = await dirHandle.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
   await w.write(blob);
   await w.close();
-  return actName(n);
+  return name;
 }
 async function pickFolder() {
   dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
@@ -420,31 +428,210 @@ async function restoreFolder() {
 $("pick").addEventListener("click", () => pickFolder().catch((e) => {
   $("out").innerHTML = '<div class="msg bad">' + (e.message || "Папку выбрать не удалось.") + "</div>";
 }));
+function expandNumbers(raw) {
+  const nos = [];
+  for (const part of (raw || "").trim().split(/\s+/)) {
+    if (!part) continue;
+    if (part.includes("-")) {
+      const [a, b] = part.split("-").map(x => parseInt(x, 10));
+      if (!isNaN(a) && !isNaN(b)) {
+        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) nos.push(i);
+      }
+    } else {
+      const n = parseInt(part, 10);
+      if (!isNaN(n)) nos.push(n);
+    }
+  }
+  return [...new Set(nos)];
+}
 $("num").addEventListener("input", () => {
   clearTimeout(timer);
   timer = setTimeout(async () => {
-    const n = Number($("num").value);
-    if (!n || !dirHandle) { $("out").innerHTML = ""; $("go").disabled = true; return; }
-    render(await lookup(n));
-    wireSlots();
+    const raw = $("num").value.trim();
+    const nos = expandNumbers(raw);
+    if (!nos.length || !dirHandle) { $("out").innerHTML = ""; $("go").disabled = true; $("pdfBtn").disabled = true; return; }
+    if (nos.length === 1) {
+      render(await lookup(nos[0]));
+      wireSlots();
+      $("pdfBtn").disabled = !$("go").disabled ? false : true;
+    } else {
+      $("out").innerHTML = '<div class="msg ok">Выбрано номеров: ' + nos.length + ' (' + nos.slice(0,10).join(", ") + (nos.length>10?"…":"") + ')</div>';
+      $("go").disabled = false;
+      $("pdfBtn").disabled = false;
+      ready = true;
+    }
   }, 200);
 });
 $("go").addEventListener("click", async () => {
   if (!ready) return;
   $("go").disabled = true;
-  $("hint").textContent = "Собираю…";
-  try {
-    const name = await saveAct(Number($("num").value));
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Сохранено в папке: ' + name + "</div>");
-  } catch (e) {
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + e.message + "</div>");
+  const nos = expandNumbers($("num").value);
+  $("hint").textContent = "Собираю " + nos.length + "…";
+  const done = [];
+  for (const n of nos) {
+    try {
+      const name = await saveAct(n);
+      done.push(name);
+    } catch (e) {
+      $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + n + ": " + e.message + "</div>");
+    }
   }
+  $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Сохранено: ' + done.join(", ") + "</div>");
   $("go").disabled = false;
   $("hint").textContent = "";
 });
 if (typeof window.showDirectoryPicker !== "function") {
   $("out").innerHTML = '<div class="msg bad">Нужен Chrome или Edge. В этом браузере папку выбрать нельзя.</div>';
 }
+
+async function makeActPdf(n) {
+  const info = await lookup(n);
+  if (!info.ok || !info.can_build) throw new Error(info.block || info.error);
+  const { PDFDocument, rgb } = PDFLib;
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  let y = 800;
+  page.drawText("Акт об устранении № " + (info.act.integration || n), { x: 50, y, size: 16, font: bold });
+  y -= 30;
+  page.drawText("Номер: " + n + "   Инт.: " + (info.act.integration || "—"), { x: 50, y, size: 11, font });
+  y -= 18;
+  page.drawText("Предписание: " + (info.act.pred_date || "—") + "   Срок: " + (info.act.deadline || "—"), { x: 50, y, size: 11, font });
+  y -= 18;
+  const desc = (info.act.description || "").slice(0, 200);
+  page.drawText(desc, { x: 50, y, size: 10, font, maxWidth: 500 });
+  y -= 40;
+  // photos
+  const entries = await listEntries();
+  const before = findPhotoEntry(entries, n, 1);
+  const after = findPhotoEntry(entries, n, 2);
+  if (before) {
+    const bytes = new Uint8Array(await (await before.handle.getFile()).arrayBuffer());
+    try {
+      const img = await pdf.embedJpg(bytes);
+      page.drawImage(img, { x: 50, y: y - 180, width: 220, height: 160 });
+    } catch (_) {}
+  }
+  if (after) {
+    const bytes = new Uint8Array(await (await after.handle.getFile()).arrayBuffer());
+    try {
+      const img = await pdf.embedJpg(bytes);
+      page.drawImage(img, { x: 300, y: y - 180, width: 220, height: 160 });
+    } catch (_) {}
+  }
+  page.drawText("Приложение 1", { x: 450, y: 40, size: 10, font });
+  return await pdf.save();
+}
+
+async function makeCoverPdf(nos) {
+  const { PDFDocument, rgb } = PDFLib;
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  page.drawText("Обложка актов об устранении", { x: 40, y: 800, size: 14, font: bold });
+  let y = 770;
+  page.drawText("№", { x: 40, y, size: 9, font: bold });
+  page.drawText("Инт. №", { x: 90, y, size: 9, font: bold });
+  page.drawText("Описание", { x: 160, y, size: 9, font: bold });
+  y -= 4;
+  page.drawLine({ start: { x: 40, y }, end: { x: 555, y }, thickness: 0.5 });
+  y -= 12;
+  const rowH = Math.max(10, Math.min(16, (y - 30) / Math.max(nos.length, 1)));
+  for (const n of nos) {
+    if (y < 30) break;
+    const info = await lookup(n);
+    const intn = info.ok ? (info.act.integration || "—") : "—";
+    const desc = info.ok ? (info.act.description || "").slice(0, 70) : "";
+    page.drawText(String(n), { x: 40, y, size: 8, font });
+    page.drawText(String(intn), { x: 90, y, size: 8, font });
+    page.drawText(desc, { x: 160, y, size: 7, font, maxWidth: 380 });
+    y -= rowH;
+  }
+  return await pdf.save();
+}
+
+async function downloadPdf(bytes, name) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$("pdfBtn").addEventListener("click", async () => {
+  const nos = expandNumbers($("num").value);
+  if (!nos.length) return;
+  $("hint").textContent = "Делаю PDF…";
+  try {
+    if (nos.length === 1) {
+      const bytes = await makeActPdf(nos[0]);
+      await downloadPdf(bytes, "Акт_" + nos[0] + ".pdf");
+    } else {
+      const { PDFDocument } = PDFLib;
+      const merged = await PDFDocument.create();
+      for (const n of nos) {
+        try {
+          const bytes = await makeActPdf(n);
+          const src = await PDFDocument.load(bytes);
+          const [p] = await merged.copyPages(src, [0]);
+          merged.addPage(p);
+        } catch (_) {}
+      }
+      await downloadPdf(await merged.save(), "акты.pdf");
+    }
+    $("hint").textContent = "PDF готов";
+  } catch (e) {
+    $("hint").textContent = "";
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + e.message + "</div>");
+  }
+});
+
+$("coverBtn").addEventListener("click", async () => {
+  const nos = expandNumbers($("num").value);
+  if (!nos.length) { alert("Укажите номера в поле выше"); return; }
+  $("hint").textContent = "Делаю обложку…";
+  try {
+    const bytes = await makeCoverPdf(nos);
+    await downloadPdf(bytes, "обложка.pdf");
+    $("hint").textContent = "Обложка готова";
+  } catch (e) {
+    $("hint").textContent = "";
+    alert(e.message);
+  }
+});
+
+$("journalBtn").addEventListener("click", async () => {
+  const nos = expandNumbers($("num").value);
+  if (!nos.length) { alert("Укажите номера в поле выше"); return; }
+  $("hint").textContent = "Собираю журнал…";
+  try {
+    const { PDFDocument } = PDFLib;
+    const journal = await PDFDocument.create();
+    // cover
+    const coverBytes = await makeCoverPdf(nos);
+    const coverDoc = await PDFDocument.load(coverBytes);
+    const [coverPage] = await journal.copyPages(coverDoc, [0]);
+    journal.addPage(coverPage);
+    // acts
+    for (const n of nos) {
+      try {
+        const bytes = await makeActPdf(n);
+        const src = await PDFDocument.load(bytes);
+        const [p] = await journal.copyPages(src, [0]);
+        journal.addPage(p);
+      } catch (_) {}
+    }
+    await downloadPdf(await journal.save(), "журнал.pdf");
+    $("hint").textContent = "Журнал готов";
+  } catch (e) {
+    $("hint").textContent = "";
+    alert(e.message);
+  }
+});
+
 restoreFolder().then(() => loadOpen().then(renderOpen));
 
 function wireSlots() {
