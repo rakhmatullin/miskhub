@@ -212,14 +212,15 @@ $("xmlIn").addEventListener("change", async () => {
   $("hint").textContent = "Разбираю архив…";
   try {
     const newMap = await parseXmlArchive(file);
+    const keys = Object.keys(newMap);
     Object.assign(intMap, newMap);
     await saveIntMap();
     await loadIntMap();
     await loadOpen();
     await loadIntMap();
     renderOpen();
-    $("hint").textContent = "Загружено интеграционных номеров: " + Object.keys(newMap).length;
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Архив обработан, сохранено в интеграционные.json</div>');
+    $("hint").textContent = "Найдено соответствий: " + keys.length;
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Архив обработан. Найдено: ' + keys.length + '. Пример: ' + (keys.slice(0,5).map(k => k+"→"+newMap[k]).join(", ") || "пусто — пришли архив или структуру") + '</div>');
   } catch (e) {
     $("hint").textContent = "";
     alert("Ошибка разбора: " + e.message);
