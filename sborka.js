@@ -607,6 +607,7 @@ async function makeActPdf(n) {
   if (!info.ok || !info.can_build) throw new Error(info.block || info.error);
   const { PDFDocument, rgb } = PDFLib;
   const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(await getCyrFont());
   const bold = font;
@@ -645,6 +646,7 @@ async function makeActPdf(n) {
 async function makeCoverPdf(nos) {
   const { PDFDocument, rgb } = PDFLib;
   const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(await getCyrFont());
   const bold = font;
@@ -708,8 +710,9 @@ $("pdfBtn").addEventListener("click", async () => {
 });
 
 $("coverBtn").addEventListener("click", async () => {
-  const nos = expandNumbers($("num").value);
-  if (!nos.length) { alert("Укажите номера в поле выше"); return; }
+  let nos = expandNumbers($("num").value);
+  if (!nos.length) nos = openRows.map(r => r.act_no);
+  if (!nos.length) { alert("Нет номеров"); return; }
   $("hint").textContent = "Делаю обложку…";
   try {
     const bytes = await makeCoverPdf(nos);
@@ -722,12 +725,13 @@ $("coverBtn").addEventListener("click", async () => {
 });
 
 $("journalBtn").addEventListener("click", async () => {
-  const nos = expandNumbers($("num").value);
-  if (!nos.length) { alert("Укажите номера в поле выше"); return; }
-  $("hint").textContent = "Собираю журнал…";
+  const nos = openRows.map(r => r.act_no);
+  if (!nos.length) { alert("Нет незакрытых актов"); return; }
+  $("hint").textContent = "Собираю журнал по всем незакрытым…";
   try {
     const { PDFDocument } = PDFLib;
     const journal = await PDFDocument.create();
+    journal.registerFontkit(fontkit);
     // cover
     const coverBytes = await makeCoverPdf(nos);
     const coverDoc = await PDFDocument.load(coverBytes);
