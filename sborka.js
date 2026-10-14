@@ -203,33 +203,15 @@ $("xmlIn").addEventListener("change", async () => {
   if (!file || !dirHandle) { alert("Сначала выбери папку"); return; }
   $("hint").textContent = "Разбираю архив…";
   try {
-    const zip = await JSZip.loadAsync(file);
-    let xmlCount = 0;
-    let samplePath = "";
-    let sampleSnippet = "";
-    zip.forEach((path, entry) => {
-      if (!entry.dir && path.toLowerCase().endsWith(".xml")) {
-        xmlCount++;
-        if (!samplePath) samplePath = path;
-      }
-    });
-    if (samplePath) {
-      const entry = zip.file(samplePath);
-      if (entry) {
-        const txt = await entry.async("string");
-        sampleSnippet = txt.slice(0, 180).replace(/</g, "<");
-      }
-    }
     const newMap = await parseXmlArchive(file);
-    const keys = Object.keys(newMap);
     Object.assign(intMap, newMap);
     await saveIntMap();
     await loadIntMap();
     await loadOpen();
     await loadIntMap();
     renderOpen();
-    $("hint").textContent = "XML: " + xmlCount + ", соответствий: " + keys.length;
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">XML: ' + xmlCount + ' путь: ' + samplePath + '<br>сниппет: ' + sampleSnippet + '<br>Найдено: ' + keys.length + '</div>');
+    $("hint").textContent = "Загружено интеграционных: " + Object.keys(newMap).length;
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Интеграционные номера сохранены (' + Object.keys(newMap).length + ')</div>');
   } catch (e) {
     $("hint").textContent = "";
     alert("Ошибка разбора: " + e.message);
@@ -301,7 +283,10 @@ function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Комментарий</th></tr></thead><tbody>' +
+    '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
+    '<th><input class="colname" data-col="c1" value="' + esc(colNames.c1) + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '<th><input class="colname" data-col="c2" value="' + esc(colNames.c2) + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '</tr></thead><tbody>' +
     rows + "</tbody></table></section>";
   host.querySelectorAll("[data-cmt]").forEach((el) => {
     el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.value));
@@ -571,14 +556,24 @@ if (typeof window.showDirectoryPicker !== "function") {
   $("out").innerHTML = '<div class="msg bad">Нужен Chrome или Edge. В этом браузере папку выбрать нельзя.</div>';
 }
 
+
+let cyrFontBytes = null;
+async function getCyrFont() {
+  if (cyrFontBytes) return cyrFontBytes;
+  const res = await fetch("https://cdn.jsdelivr.net/gh/googlefonts/roboto@main/src/hinted/Roboto-Regular.ttf");
+  if (!res.ok) throw new Error("не удалось загрузить шрифт");
+  cyrFontBytes = new Uint8Array(await res.arrayBuffer());
+  return cyrFontBytes;
+}
+
 async function makeActPdf(n) {
   const info = await lookup(n);
   if (!info.ok || !info.can_build) throw new Error(info.block || info.error);
   const { PDFDocument, rgb } = PDFLib;
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
-  const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  const font = await pdf.embedFont(await getCyrFont());
+  const bold = font;
   let y = 800;
   page.drawText("Акт об устранении № " + (info.act.integration || n), { x: 50, y, size: 16, font: bold });
   y -= 30;
@@ -615,8 +610,8 @@ async function makeCoverPdf(nos) {
   const { PDFDocument, rgb } = PDFLib;
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
-  const font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  const font = await pdf.embedFont(await getCyrFont());
+  const bold = font;
   page.drawText("Обложка актов об устранении", { x: 40, y: 800, size: 14, font: bold });
   let y = 770;
   page.drawText("№", { x: 40, y, size: 9, font: bold });
