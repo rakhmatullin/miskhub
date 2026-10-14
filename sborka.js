@@ -179,29 +179,28 @@ async function saveIntMap() {
 async function parseXmlArchive(file) {
   const zip = await JSZip.loadAsync(file);
   const map = {};
-  const folders = new Set();
+  const xmlFiles = [];
   zip.forEach((path, entry) => {
-    if (entry.dir) {
-      const name = path.replace(/\/$/, "").split("/").pop();
-      if (/^\d+$/.test(name)) folders.add(name);
-    }
+    if (!entry.dir && path.toLowerCase().endsWith(".xml")) xmlFiles.push({ path, entry });
   });
-  for (const folder of folders) {
-    // find xml inside
-    let xmlFile = null;
-    zip.forEach((path, entry) => {
-      if (!entry.dir && path.startsWith(folder + "/") && path.toLowerCase().endsWith(".xml")) {
-        xmlFile = entry;
-      }
-    });
-    if (!xmlFile) continue;
-    const xmlText = await xmlFile.async("string");
-    const m = xmlText.match(/<defectNumber[^>]*>([^<]+)<\/defectNumber>/i) ||
-              xmlText.match(/defectNumber[^>]*>([^<]+)/i);
-    if (m) {
-      const intNo = m[1].trim();
-      if (intNo) map[folder] = intNo;
+  for (const { path, entry } of xmlFiles) {
+    const xmlText = await entry.async("string");
+    // find defectNumber flexibly
+    let intNo = null;
+    const m1 = xmlText.match(/<defectNumber[^>]*>([^<]+)<\/defectNumber>/i);
+    const m2 = xmlText.match(/defectNumber["\s:=]+([^<"\s]+)/i);
+    const m3 = xmlText.match(/<[^>]*defectNumber[^>]*>([^<]+)/i);
+    if (m1) intNo = m1[1].trim();
+    else if (m2) intNo = m2[1].trim();
+    else if (m3) intNo = m3[1].trim();
+    if (!intNo) continue;
+    // find the numeric folder in the path
+    const parts = path.split("/");
+    let actNo = null;
+    for (const p of parts) {
+      if (/^\d+$/.test(p)) { actNo = p; break; }
     }
+    if (actNo) map[actNo] = intNo;
   }
   return map;
 }
