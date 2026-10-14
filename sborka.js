@@ -185,22 +185,15 @@ async function parseXmlArchive(file) {
   });
   for (const { path, entry } of xmlFiles) {
     const xmlText = await entry.async("string");
-    // find defectNumber flexibly
-    let intNo = null;
-    const m1 = xmlText.match(/<defectNumber[^>]*>([^<]+)<\/defectNumber>/i);
-    const m2 = xmlText.match(/defectNumber["\s:=]+([^<"\s]+)/i);
-    const m3 = xmlText.match(/<[^>]*defectNumber[^>]*>([^<]+)/i);
-    if (m1) intNo = m1[1].trim();
-    else if (m2) intNo = m2[1].trim();
-    else if (m3) intNo = m3[1].trim();
+    const m = xmlText.match(/<[^>]*defectNumber[^>]*>([^<]+)<\/[^>]*defectNumber>/i);
+    if (!m) continue;
+    const intNo = m[1].trim();
     if (!intNo) continue;
-    // find the numeric folder in the path
-    const parts = path.split("/");
-    let actNo = null;
-    for (const p of parts) {
-      if (/^\d+$/.test(p)) { actNo = p; break; }
-    }
-    if (actNo) map[actNo] = intNo;
+    const folder = path.split("/")[0] || "";
+    const fm = folder.match(/(\d+)/);
+    if (!fm) continue;
+    const actNo = fm[1];
+    map[actNo] = intNo;
   }
   return map;
 }
