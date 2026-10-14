@@ -220,10 +220,14 @@ $("xmlIn").addEventListener("change", async () => {
 });
 
 let commentTimers = {};
-function scheduleComment(n, value) {
-  comments[String(n)] = value;
-  clearTimeout(commentTimers[n]);
-  commentTimers[n] = setTimeout(() => saveComments().catch(() => {}), 400);
+function scheduleComment(n, field, value) {
+  const key = String(n);
+  if (!comments[key] || typeof comments[key] !== "object") {
+    comments[key] = { c1: (typeof comments[key] === "string" ? comments[key] : ""), c2: "" };
+  }
+  comments[key][field || "c1"] = value;
+  clearTimeout(commentTimers[key + (field || "c1")]);
+  commentTimers[key + (field || "c1")] = setTimeout(() => saveComments().catch(() => {}), 400);
 }
 async function savePhoto(n, slot, file) {
   const jpeg = await toJpeg(file);
@@ -290,14 +294,16 @@ function renderOpen() {
   }
   let rows = "";
   openRows.forEach((r) => {
-    const c = comments[String(r.act_no)] || "";
+    const raw = comments[String(r.act_no)];
+    const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
     rows += "<tr>" +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
       '<td>' + esc(r.integration || "—") + "</td>" +
       "<td>" + esc(r.pred_date || "—") + "</td>" +
       "<td>" + esc(r.deadline || "—") + "</td>" +
       '<td class="desc">' + esc(r.description || "—") + "</td>" +
-      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" rows="2">' + esc(c) + "</textarea></td>" +
+      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
+      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
       "</tr>";
   });
   host.innerHTML =
@@ -309,7 +315,17 @@ function renderOpen() {
     '</tr></thead><tbody>' +
     rows + "</tbody></table></section>";
   host.querySelectorAll("[data-cmt]").forEach((el) => {
-    el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.value));
+    el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.dataset.field || "c1", el.value));
+  });
+  host.querySelectorAll(".colname").forEach((el) => {
+    el.addEventListener("change", () => {
+      colNames[el.dataset.col] = el.value;
+      saveColNames().catch(() => {});
+    });
+    el.addEventListener("blur", () => {
+      colNames[el.dataset.col] = el.value;
+      saveColNames().catch(() => {});
+    });
   });
   host.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
