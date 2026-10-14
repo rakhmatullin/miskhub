@@ -252,12 +252,32 @@ async function loadOpen() {
   try { openRows = parseDump(await dump.arrayBuffer()).filter((r) => r.status === "К устранению"); }
   catch (_) { openRows = []; }
   await loadComments();
+  await loadColNames();
   await loadIntMap();
   openRows.forEach(r => { if (intMap[String(r.act_no)]) r.integration = intMap[String(r.act_no)]; });
 }
 function todayStrFrom(ms) {
   const d = new Date(ms);
   return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
+}
+
+let colNames = { c1: "Комментарий", c2: "Примечание" };
+async function loadColNames() {
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, "названия_комментариев.json");
+    if (f) Object.assign(colNames, JSON.parse(await f.text()) || {});
+  } catch (_) {}
+}
+async function saveColNames() {
+  if (!dirHandle) return;
+  try {
+    const fh = await dirHandle.getFileHandle("названия_комментариев.json", { create: true });
+    const w = await fh.createWritable();
+    await w.write(new Blob([JSON.stringify(colNames)], { type: "application/json" }));
+    await w.close();
+  } catch (_) {}
 }
 function renderOpen() {
   const host = $("open");
@@ -284,8 +304,8 @@ function renderOpen() {
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
     '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
-    '<th><input class="colname" data-col="c1" value="' + esc(colNames.c1) + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
-    '<th><input class="colname" data-col="c2" value="' + esc(colNames.c2) + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '</tr></thead><tbody>' +
     rows + "</tbody></table></section>";
   host.querySelectorAll("[data-cmt]").forEach((el) => {
