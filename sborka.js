@@ -122,6 +122,7 @@ async function lookup(n) {
   else if (!act.pred_date) block = "В строке нет даты предписания.";
   else if (!act.deadline) block = "В строке нет срока устранения.";
   else if (!act.description) block = "В строке нет текста замечания.";
+  if (intMap[String(act.act_no)]) act.integration = intMap[String(act.act_no)];
   return {
     ok: true, act, act_date: todayStr(),
     before: before ? before.name : null, after: after ? after.name : null,
@@ -153,6 +154,80 @@ async function saveComments() {
   await w.write(new Blob([JSON.stringify(comments, null, 2)], { type: "application/json" }));
   await w.close();
 }
+
+const INT_MAP_FILE = "интеграционные.json";
+let intMap = {};
+
+async function loadIntMap() {
+  intMap = {};
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, INT_MAP_FILE);
+    if (!f) return;
+    intMap = JSON.parse(await f.text()) || {};
+  } catch (_) { intMap = {}; }
+}
+async function saveIntMap() {
+  if (!dirHandle) return;
+  const fh = await dirHandle.getFileHandle(INT_MAP_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(intMap, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+
+async function parseXmlArchive(file) {
+  const zip = await JSZip.loadAsync(file);
+  const map = {};
+  const folders = new Set();
+  zip.forEach((path, entry) => {
+    if (entry.dir) {
+      const name = path.replace(/\/$/, "").split("/").pop();
+      if (/^\d+$/.test(name)) folders.add(name);
+    }
+  });
+  for (const folder of folders) {
+    // find xml inside
+    let xmlFile = null;
+    zip.forEach((path, entry) => {
+      if (!entry.dir && path.startsWith(folder + "/") && path.toLowerCase().endsWith(".xml")) {
+        xmlFile = entry;
+      }
+    });
+    if (!xmlFile) continue;
+    const xmlText = await xmlFile.async("string");
+    const m = xmlText.match(/<defectNumber[^>]*>([^<]+)<\/defectNumber>/i) ||
+              xmlText.match(/defectNumber[^>]*>([^<]+)/i);
+    if (m) {
+      const intNo = m[1].trim();
+      if (intNo) map[folder] = intNo;
+    }
+  }
+  return map;
+}
+
+$("xmlArchive").addEventListener("click", () => $("xmlIn").click());
+$("xmlIn").addEventListener("change", async () => {
+  const file = $("xmlIn").files && $("xmlIn").files[0];
+  if (!file || !dirHandle) { alert("Сначала выбери папку"); return; }
+  $("hint").textContent = "Разбираю архив…";
+  try {
+    const newMap = await parseXmlArchive(file);
+    Object.assign(intMap, newMap);
+    await saveIntMap();
+    await loadIntMap();
+    await loadOpen();
+    await loadIntMap();
+    renderOpen();
+    $("hint").textContent = "Загружено интеграционных номеров: " + Object.keys(newMap).length;
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Архив обработан, сохранено в интеграционные.json</div>');
+  } catch (e) {
+    $("hint").textContent = "";
+    alert("Ошибка разбора: " + e.message);
+  }
+  $("xmlIn").value = "";
+});
+
 let commentTimers = {};
 function scheduleComment(n, value) {
   comments[String(n)] = value;
@@ -186,6 +261,8 @@ async function loadOpen() {
   try { openRows = parseDump(await dump.arrayBuffer()).filter((r) => r.status === "К устранению"); }
   catch (_) { openRows = []; }
   await loadComments();
+  await loadIntMap();
+  openRows.forEach(r => { if (intMap[String(r.act_no)]) r.integration = intMap[String(r.act_no)]; });
 }
 function todayStrFrom(ms) {
   const d = new Date(ms);
@@ -422,6 +499,7 @@ async function restoreFolder() {
     $("folder").textContent = dirHandle.name;
     await refreshFiles();
     await loadOpen();
+    await loadIntMap();
     renderOpen();
   } catch (_) {}
 }
