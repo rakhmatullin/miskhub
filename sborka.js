@@ -211,6 +211,15 @@ $("xmlIn").addEventListener("change", async () => {
   if (!file || !dirHandle) { alert("Сначала выбери папку"); return; }
   $("hint").textContent = "Разбираю архив…";
   try {
+    const zip = await JSZip.loadAsync(file);
+    let xmlCount = 0;
+    let samplePath = "";
+    zip.forEach((path, entry) => {
+      if (!entry.dir && path.toLowerCase().endsWith(".xml")) {
+        xmlCount++;
+        if (!samplePath) samplePath = path;
+      }
+    });
     const newMap = await parseXmlArchive(file);
     const keys = Object.keys(newMap);
     Object.assign(intMap, newMap);
@@ -219,8 +228,8 @@ $("xmlIn").addEventListener("change", async () => {
     await loadOpen();
     await loadIntMap();
     renderOpen();
-    $("hint").textContent = "Найдено соответствий: " + keys.length;
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Архив обработан. Найдено: ' + keys.length + '. Пример: ' + (keys.slice(0,5).map(k => k+"→"+newMap[k]).join(", ") || "пусто — пришли архив или структуру") + '</div>');
+    $("hint").textContent = "XML: " + xmlCount + ", соответствий: " + keys.length;
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">XML-файлов: ' + xmlCount + ' (пример пути: ' + samplePath + '). Найдено: ' + keys.length + '. Пример: ' + (keys.slice(0,3).map(k=>k+"→"+newMap[k]).join(", ") || "пусто") + '</div>');
   } catch (e) {
     $("hint").textContent = "";
     alert("Ошибка разбора: " + e.message);
