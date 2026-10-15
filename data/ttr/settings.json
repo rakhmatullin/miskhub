@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "ranges": {
+    "workers": { "min": 13, "max": 15 },
+    "itr": { "min": 4, "max": 5 },
+    "tech": { "min": 4, "max": 5 }
+  },
+  "mail": {
+    "enabled": false,
+    "from": "rahmatullin.rr@mis-k.ru",
+    "fromName": "Рахматуллин Ренат",
+    "smtpHost": "smtp.mail.ru",
+    "smtpPort": 465,
+    "sendTime": "09:00",
+    "timezone": "Europe/Moscow",
+    "weekdays": [0, 1, 2, 3, 4, 5, 6],
+    "to": [],
+    "cc": [],
+    "subject": "Акт фиксации ТТР {date}",
+    "body": "Добрый день.\n\nНаправляю акт фиксации технических и трудовых ресурсов на {date}.\nРабочие — {workers}, ИТР — {itr}, машинисты спецтехники — {tech}. Итого — {sum}.\n\nС уважением,\nРахматуллин Ренат"
+  }
+}

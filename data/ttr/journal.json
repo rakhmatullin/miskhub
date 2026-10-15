@@ -1,0 +1,31 @@
+{
+  "days": {
+    "2026-10-10": {
+      "workers": 13,
+      "itr": 4,
+      "tech": 4,
+      "sum": 21,
+      "locked": true,
+      "status": "archive",
+      "note": "Исходный акт"
+    },
+    "2026-10-13": {
+      "workers": 14,
+      "itr": 5,
+      "tech": 4,
+      "sum": 23,
+      "locked": true,
+      "status": "archive",
+      "note": "Исходный акт"
+    },
+    "2026-10-15": {
+      "workers": 14,
+      "itr": 5,
+      "tech": 4,
+      "sum": 23,
+      "locked": true,
+      "status": "archive",
+      "note": "Исходный акт"
+    }
+  }
+}

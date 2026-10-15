@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Акт ТТР — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6" />
+  <link rel="apple-touch-icon" href="./assets/favicon.svg?v=6" />
+  <link rel="stylesheet" href="./hub.css?v=8" />
+  <style>
+    .layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: 16px; align-items: start; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+    .nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+    .nums div { background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; }
+    .nums b { display: block; font-size: 26px; letter-spacing: -0.03em; }
+    .nums span { color: var(--mute); font-size: 11px; }
+    .sheet-wrap { background: #fff; border-radius: 12px; overflow: hidden; }
+    #sheet { width: 100%; height: auto; display: block; }
+    #frame { width: 100%; height: 70vh; border: 0; background: #fff; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; color: var(--mute); font-size: 12px; }
+    .field input, .field textarea, .field select {
+      width: 100%; background: #09111e; color: var(--text); border: 1px solid var(--line);
+      border-radius: 10px; padding: 12px; font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
+    }
+    textarea { min-height: 140px; resize: vertical; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .days { display: flex; flex-wrap: wrap; gap: 6px; }
+    .days button.on { background: #1c4d86; border-color: #2b6cb0; color: #fff; }
+    .msg { padding: 12px 14px; border-radius: 10px; margin: 10px 0; }
+    .msg.ok { background: #14331f; color: var(--ok); }
+    .msg.bad { background: #3a1820; color: var(--bad); }
+    .msg.info { background: #10233f; color: #cfe4ff; }
+    .log-wrap { overflow-x: auto; max-width: 100%; }
+    .panel, .layout, main { min-width: 0; }
+    main { overflow-x: hidden; }
+    ::placeholder { color: #6d80a4; }
+    .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .switch b { color: var(--text); font-weight: 600; }
+    .hint { color: var(--mute); font-size: 12px; margin: 6px 0 0; }
+    code { font-size: 12px; }
+    @media (max-width: 900px) {
+      .layout, .row3 { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 28px; }
+      main { padding: 22px 14px 64px; }
+      .nums b { font-size: 22px; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+</head>
+<body data-page="ttr">
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html"><span>MiskHub</span></a>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">Каждый день · бланк УДМС · почта Mail.ru</p>
+      <h1>Акт фиксации ТТР</h1>
+      <p class="lead">Бланк тот же: шапка, объект, подписи. Меняются дата и три числа. План всегда равен факту. Утром файл сам уходит с рабочей почты.</p>
+    </section>
+    <div id="msg"></div>
+    <div class="layout">
+      <section class="panel">
+        <label class="field" for="date">Дата акта
+          <input id="date" type="date" />
+        </label>
+        <div class="nums">
+          <div><b id="n-workers">—</b><span>рабочие</span></div>
+          <div><b id="n-itr">—</b><span>ИТР</span></div>
+          <div><b id="n-tech">—</b><span>техника</span></div>
+          <div><b id="n-sum">—</b><span>итого</span></div>
+        </div>
+        <p class="hint" id="day-status"></p>
+        <p class="hint">В акте у плана стоит звёздочка, факт без неё. Сумма считается сама. Время в бланке остаётся 10:00.</p>
+        <div class="toolbar">
+          <button type="button" class="primary" id="download">Скачать PDF</button>
+          <button type="button" id="reroll">Другие числа</button>
+          <button type="button" id="lock">Зафиксировать</button>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="primary" id="send">Отправить сейчас</button>
+          <button type="button" id="resend">Отправить ещё раз</button>
+        </div>
+        <p class="hint" id="fname"></p>
+        <div class="sheet-wrap">
+          <canvas id="sheet"></canvas>
+          <iframe id="frame" title="Предпросмотр акта" hidden></iframe>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Диапазоны</h2>
+        <p class="hint">Целые числа включительно. На уже зафиксированную дату диапазон не влияет.</p>
+        <div class="row2">
+          <label class="field">Рабочие от<input id="w-min" type="number" min="0" max="999" inputmode="numeric" /></label>
+          <label class="field">Рабочие до<input id="w-max" type="number" min="0" max="999" inputmode="numeric" /></label>
+          <label class="field">ИТР от<input id="i-min" type="number" min="0" max="999" inputmode="numeric" /></label>
+          <label class="field">ИТР до<input id="i-max" type="number" min="0" max="999" inputmode="numeric" /></label>
+          <label class="field">Техника от<input id="t-min" type="number" min="0" max="999" inputmode="numeric" /></label>
+          <label class="field">Техника до<input id="t-max" type="number" min="0" max="999" inputmode="numeric" /></label>
+        </div>
+        <h2>Письмо</h2>
+        <div class="switch">
+          <div><b>Отправлять каждый день</b><div class="hint">После выбранного времени, один раз за дату.</div></div>
+          <input id="enabled" type="checkbox" />
+        </div>
+        <div class="row2">
+          <label class="field">Время, МСК<input id="send-time" type="time" /></label>
+          <label class="field">Порт SMTP<input id="port" type="number" /></label>
+        </div>
+        <div class="field">Дни<div class="days" id="days"></div></div>
+        <label class="field">От кого, ящик Mail.ru<input id="from" type="email" autocomplete="off" placeholder="name@mis-k.ru" /></label>
+        <label class="field">Имя отправителя<input id="from-name" type="text" /></label>
+        <label class="field">Сервер<input id="smtp" type="text" /></label>
+        <label class="field">Кому, по одному адресу в строке<textarea id="to" placeholder="name@company.ru"></textarea></label>
+        <label class="field">Копия<textarea id="cc" placeholder="необязательно"></textarea></label>
+        <label class="field">Тема<input id="subject" type="text" /></label>
+        <label class="field">Текст<textarea id="body"></textarea></label>
+        <p class="hint">В теме и тексте: <code>{date}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{sum}</code> <code>{filename}</code></p>
+        <label class="field">Пароль Mail.ru<input id="password" type="password" autocomplete="new-password" placeholder="не менять, если уже сохранён" /></label>
+        <p class="hint">Пароль не пишется в папку data: репозиторий публичный. Он уходит в секрет GitHub <code>TTR_MAIL_PASSWORD</code>. Для Mail.ru лучше пароль приложения: Настройки → Безопасность → Пароли для внешних приложений.</p>
+        <details>
+          <summary id="token-sum">Токен GitHub</summary>
+          <label class="field">Токен с правом менять этот репозиторий и секреты Actions
+            <input id="token" type="password" autocomplete="off" placeholder="github_pat_…" />
+          </label>
+          <p class="hint">Создай на <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">github.com/settings</a> токен только для <code>rakhmatullin/miskhub</code>: Contents — Read and write, Secrets — Read and write. Он остаётся в этом браузере.</p>
+          <button type="button" id="save-token">Запомнить токен</button>
+        </details>
+        <div class="toolbar">
+          <button type="button" class="primary" id="save">Сохранить на GitHub</button>
+        </div>
+        <p class="hint" id="secret-state"></p>
+      </section>
+    </div>
+    <section class="panel" style="margin-top:16px">
+      <h2>Журнал</h2>
+      <p class="hint">Что ушло и какие числа закреплены. PDF за любой день можно скачать заново — числа не переиграются.</p>
+      <div class="log-wrap">
+        <table class="table" id="log"></table>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
+    <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
+  </footer>
+  <script type="module" src="./ttr-app.js?v=1"></script>
+  <script src="./hub-nav.js?v=9"></script>
+</body>
+</html>

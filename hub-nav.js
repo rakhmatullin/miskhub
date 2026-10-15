@@ -42,11 +42,40 @@
   function clean() {
     var header = document.querySelector("header");
     if (!header) return false;
-    var nav = header.querySelector("nav");
-    if (nav) nav.remove();
-    var brand = header.querySelector("a");
+    var brand = header.querySelector("a.brand, a");
     if (brand) styleBrand(brand);
+    ensureStyle();
+    ensureNav(header);
     return !!brand;
+  }
+  function ensureStyle() {
+    if (document.getElementById("hub-tools-style")) return;
+    var st = document.createElement("style");
+    st.id = "hub-tools-style";
+    st.textContent = "header.top{flex-wrap:wrap;gap:8px 14px}#hub-tools{display:flex!important;flex-wrap:wrap;gap:8px 14px;align-items:center}#hub-tools a{color:#8ea0c0;text-decoration:none;font-size:13px;padding:4px 0;white-space:nowrap}#hub-tools a.on,#hub-tools a:hover{color:#fff}";
+    document.head.appendChild(st);
+  }
+  function ensureNav(header) {
+    var nav = header.querySelector("nav");
+    if (!nav) {
+      nav = document.createElement("nav");
+      header.appendChild(nav);
+    }
+    if (nav.dataset.tools === "1" && nav.querySelector("a")) return;
+    nav.id = "hub-tools";
+    nav.dataset.tools = "1";
+    var path = location.pathname;
+    var page = document.body && document.body.dataset.page;
+    var byPage = { sborka: "sborka.html", sverka: "sverka-vesov.html", ttr: "ttr.html" };
+    function on(file) {
+      if (page && byPage[page]) return byPage[page] === file;
+      if (file === "index.html") return /\/$/.test(path) || /\/index\.html$/.test(path) || /\/miskhub$/.test(path);
+      return path.indexOf("/" + file) !== -1;
+    }
+    var items = [["index.html", "Граф"], ["sborka.html", "Акты"], ["sverka-vesov.html", "Веса"], ["ttr.html", "Акт ТТР"]];
+    nav.innerHTML = items.map(function (it) {
+      return '<a href="./' + it[0] + '"' + (on(it[0]) ? ' class="on"' : "") + ">" + it[1] + "</a>";
+    }).join("");
   }
   var n = 0;
   var t = setInterval(function () { clean(); if (++n > 150) clearInterval(t); }, 80);
