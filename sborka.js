@@ -246,6 +246,67 @@ function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+
+const SEQ_FILE = "последовательности_актов.json";
+let sequences = { open: [], closed: [], new: [] };
+
+async function loadSequences() {
+  sequences = { open: [], closed: [], new: [] };
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, SEQ_FILE);
+    if (!f) return;
+    const data = JSON.parse(await f.text()) || {};
+    sequences.open = Array.isArray(data.open) ? data.open : [];
+    sequences.closed = Array.isArray(data.closed) ? data.closed : [];
+    sequences.new = Array.isArray(data.new) ? data.new : [];
+  } catch (_) { sequences = { open: [], closed: [], new: [] }; }
+}
+
+async function saveSequences() {
+  if (!dirHandle) return;
+  const payload = {
+    _comment: "Файл последовательностей актов для нейронки и человека. open — текущие незакрытые номера в порядке первого появления. closed — закрытые в порядке закрытия. new — новые в порядке появления. Логика: при загрузке выгрузки номера, исчезнувшие из open, переносятся в closed; новые из выгрузки добавляются в open и new. Не править вручную без понимания.",
+    open: sequences.open,
+    closed: sequences.closed,
+    new: sequences.new
+  };
+  const fh = await dirHandle.getFileHandle(SEQ_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+
+async function updateSequences() {
+  await loadSequences();
+  const current = openRows.map(r => r.act_no);
+  const currentSet = new Set(current);
+  if (sequences.open.length === 0 && sequences.closed.length === 0 && sequences.new.length === 0) {
+    sequences.open = [...current];
+    sequences.closed = [];
+    sequences.new = [];
+  } else {
+    // numbers in open that disappeared from dump → move to closed
+    const stillOpen = [];
+    for (const n of sequences.open) {
+      if (currentSet.has(n)) stillOpen.push(n);
+      else sequences.closed.push(n);
+    }
+    sequences.open = stillOpen;
+    // numbers in dump not in open → add to open and new
+    const openSet = new Set(sequences.open);
+    for (const n of current) {
+      if (!openSet.has(n)) {
+        sequences.open.push(n);
+        sequences.new.push(n);
+        openSet.add(n);
+      }
+    }
+  }
+  await saveSequences();
+}
+
 async function loadOpen() {
   openRows = []; dumpDate = "";
   if (!dirHandle) return;
@@ -259,6 +320,7 @@ async function loadOpen() {
   await loadColNames();
   await loadIntMap();
   openRows.forEach(r => { if (intMap[String(r.act_no)]) r.integration = intMap[String(r.act_no)]; });
+  await updateSequences();
 }
 function todayStrFrom(ms) {
   const d = new Date(ms);
@@ -334,6 +396,15 @@ function renderOpen() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   });
+
+  // sequences display
+  const seqHtml = '<section class="tape-wrap" style="margin-top:16px"><div class="open-head"><strong>Последовательности актов</strong></div>' +
+    '<p class="kicker">open (незакрытые по порядку появления): ' + (sequences.open.join(", ") || "—") + '</p>' +
+    '<p class="kicker">closed (закрытые по порядку закрытия): ' + (sequences.closed.join(", ") || "—") + '</p>' +
+    '<p class="kicker">new (новые по порядку появления): ' + (sequences.new.join(", ") || "—") + '</p>' +
+    '<p class="muted" style="font-size:11px">Файл последовательности_актов.json в папке. Комментарий внутри объясняет логику для человека и нейронки.</p></section>';
+  host.insertAdjacentHTML("beforeend", seqHtml);
+
 }
 
 function render(d) {
