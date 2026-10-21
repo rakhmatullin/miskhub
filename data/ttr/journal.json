@@ -33,8 +33,11 @@
       "tech": 5,
       "sum": 24,
       "locked": true,
-      "status": "locked",
-      "error": ""
+      "status": "error",
+      "error": "Invalid login: 535 5.7.0 NEOBHODIM parol prilozheniya https://help.mail.ru/mail/security/protection/external / Application password is REQUIRED",
+      "failedAt": "2026-10-21T10:15:12.797Z",
+      "attempts": 1,
+      "filename": "Акт фиксации ТТР 21.10.2026.pdf"
     }
   }
 }
