@@ -23,7 +23,13 @@
     "sendTime": "14:30",
     "timezone": "Europe/Moscow",
     "weekdays": [
-      3
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      0
     ],
     "to": [
       "rahmatullin.rr@mis-k.ru"
