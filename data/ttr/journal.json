@@ -32,12 +32,20 @@
       "itr": 4,
       "tech": 5,
       "sum": 24,
+      "status": "sent",
+      "note": "",
       "locked": true,
-      "status": "error",
-      "error": "Invalid login: 535 5.7.0 NEOBHODIM parol prilozheniya https://help.mail.ru/mail/security/protection/external / Application password is REQUIRED",
-      "failedAt": "2026-10-21T10:15:12.797Z",
-      "attempts": 1,
-      "filename": "Акт фиксации ТТР 21.10.2026.pdf"
+      "sentAt": "2026-10-21T10:23:49.395Z",
+      "to": [
+        "rahmatullin.rr@mis-k.ru"
+      ],
+      "cc": [
+        "renrahman@gmail.com"
+      ],
+      "filename": "Акт фиксации ТТР 21.10.2026.pdf",
+      "messageId": "<6b105ab6-98ed-64a5-80bf-0e636cd5b3e7@mis-k.ru>",
+      "error": "",
+      "attempts": 2
     }
   }
 }
