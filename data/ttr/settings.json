@@ -20,10 +20,10 @@
     "fromName": "Рахматуллин Ренат",
     "smtpHost": "smtp.mail.ru",
     "smtpPort": 465,
-    "sendTime": "12:03",
+    "sendTime": "12:12",
     "timezone": "Europe/Moscow",
     "weekdays": [
-      1
+      3
     ],
     "to": [
       "rahmatullin.rr@mis-k.ru"
