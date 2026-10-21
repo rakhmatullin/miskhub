@@ -26,6 +26,15 @@
       "locked": true,
       "status": "archive",
       "note": "Исходный акт"
+    },
+    "2026-10-21": {
+      "workers": 15,
+      "itr": 4,
+      "tech": 5,
+      "sum": 24,
+      "locked": true,
+      "status": "locked",
+      "error": ""
     }
   }
 }
