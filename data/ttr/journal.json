@@ -35,7 +35,7 @@
       "status": "sent",
       "note": "",
       "locked": true,
-      "sentAt": "2026-10-21T10:23:49.395Z",
+      "sentAt": "2026-10-21T11:25:05.925Z",
       "to": [
         "rahmatullin.rr@mis-k.ru"
       ],
@@ -43,9 +43,9 @@
         "renrahman@gmail.com"
       ],
       "filename": "Акт фиксации ТТР 21.10.2026.pdf",
-      "messageId": "<6b105ab6-98ed-64a5-80bf-0e636cd5b3e7@mis-k.ru>",
+      "messageId": "<d10a0c7e-5737-d1a3-3eec-2e132236ce8b@mis-k.ru>",
       "error": "",
-      "attempts": 2
+      "attempts": 3
     }
   }
 }
