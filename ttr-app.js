@@ -143,7 +143,17 @@ async function gh(method, path, body) {
     data = { message: text };
   }
   if (!res.ok) {
-    const err = new Error(data.message || res.statusText);
+    let message = data.message || res.statusText;
+    if (message === "Resource not accessible by personal access token") {
+      if (path.includes("/actions/workflows/") && path.includes("/dispatches")) {
+        message = "Токен не может запускать Actions. В fine-grained токене нужно право Actions → Read and write (и Contents → Read and write). Создай новый токен только на репозиторий rakhmatullin/miskhub.";
+      } else if (path.includes("/actions/secrets")) {
+        message = "Токен не видит секреты. Нужно право Secrets → Read and write.";
+      } else {
+        message = "Токен не имеет доступа к ресурсу. Проверь, что fine-grained токен выдан именно на rakhmatullin/miskhub и имеет Contents + Actions + Secrets (Read and write).";
+      }
+    }
+    const err = new Error(message);
     err.status = res.status;
     throw err;
   }
