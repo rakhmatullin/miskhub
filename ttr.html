@@ -123,10 +123,14 @@
         <p class="hint">Пароль не пишется в папку data: репозиторий публичный. Он уходит в секрет GitHub <code>TTR_MAIL_PASSWORD</code>. Для Mail.ru лучше пароль приложения: Настройки → Безопасность → Пароли для внешних приложений.</p>
         <details>
           <summary id="token-sum">Токен GitHub</summary>
-          <label class="field">Токен с правом менять этот репозиторий и секреты Actions
+          <label class="field">Токен с правом Contents + Actions + Secrets
             <input id="token" type="password" autocomplete="off" placeholder="github_pat_…" />
           </label>
-          <p class="hint">Создай на <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">github.com/settings</a> токен только для <code>rakhmatullin/miskhub</code>: Contents — Read and write, Secrets — Read and write. Он остаётся в этом браузере.</p>
+          <p class="hint">Создай на <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">github.com/settings</a> fine-grained токен только для <code>rakhmatullin/miskhub</code>:
+<strong>Contents</strong> — Read and write,
+<strong>Actions</strong> — Read and write,
+<strong>Secrets</strong> — Read and write.
+Без права Actions кнопка «Отправить сейчас» даёт ошибку Resource not accessible. Токен остаётся в этом браузере.</p>
           <button type="button" id="save-token">Запомнить токен</button>
         </details>
         <div class="toolbar">
@@ -147,7 +151,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=1"></script>
+  <script type="module" src="./ttr-app.js?v=2"></script>
   <script src="./hub-nav.js?v=9"></script>
 </body>
 </html>
