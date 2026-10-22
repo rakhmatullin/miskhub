@@ -15,12 +15,12 @@
     }
   },
   "mail": {
-    "enabled": false,
+    "enabled": true,
     "from": "rahmatullin.rr@mis-k.ru",
     "fromName": "Рахматуллин Ренат",
     "smtpHost": "smtp.mail.ru",
     "smtpPort": 465,
-    "sendTime": "08:00",
+    "sendTime": "09:42",
     "timezone": "Europe/Moscow",
     "weekdays": [
       1,
@@ -32,7 +32,8 @@
       0
     ],
     "to": [
-      "rahmatullin.rr@mis-k.ru"
+      "rahmatullin.rr@mis-k.ru",
+      "rakhmatovrr1@str.mos.ru"
     ],
     "cc": [
       "renrahman@gmail.com"
