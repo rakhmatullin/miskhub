@@ -1,1 +1,89 @@
-PLACEHOLDER2
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Сборка актов — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6">
+  <link rel="apple-touch-icon" href="./assets/favicon.svg?v=6">
+  <link rel="stylesheet" href="./hub.css?v=7" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+  <style>
+    .numbox { width: 100%; font-size: 32px; padding: 10px 12px; background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+    .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+    .photos img { width: 100%; height: 280px; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
+    .meta div { padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .meta div:last-child { border-bottom: 0; }
+    .k { color: var(--mute); display: inline-block; width: 168px; }
+    .msg { padding: 12px 14px; border-radius: 10px; margin-bottom: 12px; }
+    .msg.ok { background: #14331f; color: var(--ok); }
+    .msg.bad { background: #3a1820; color: var(--bad); }
+    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #152238; color: var(--mute); margin-right: 6px; }
+    .pill.ok { background: #14331f; color: var(--ok); }
+    .pill.bad { background: #3a1820; color: var(--bad); }
+    @media (max-width: 700px) { .photos { grid-template-columns: 1fr; } }
+    .slot { position: relative; cursor: pointer; }
+    .slot .ph {
+      width: 100%; height: 200px; border-radius: 12px; border: 1px dashed var(--line);
+      background: #09111e; display: grid; place-items: center; color: var(--mute); font-size: 13px;
+    }
+    .slot .chg {
+      position: absolute; right: 8px; bottom: 28px; background: #000c; color: #fff;
+      border: 0; border-radius: 8px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    .open-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table th, .table td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+    .table th { color: var(--mute); font-weight: 600; }
+    .table .num { cursor: pointer; color: var(--accent, #6ea8fe); font-weight: 700; }
+    .table .desc { max-width: 280px; }
+    .table textarea.cmt { width: 100%; min-width: 100px; background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; resize: vertical; }
+    footer { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; padding: 16px 0; margin-top: 24px; border-top: 1px solid var(--line); font-size: 12px; color: var(--mute); }
+  </style>
+</head>
+<body>
+  <div id="hub-nav"></div>
+  <main class="wrap">
+    <header class="hero">
+      <div>
+        <p class="kicker">MiskHub · инструмент</p>
+        <h1>Сборка актов</h1>
+        <p class="lead">Выбери папку с выгрузкой и фото. Сформируй акт, PDF-страницу, обложку или журнал.</p>
+      </div>
+    </header>
+
+    <section class="tape-wrap">
+      <div class="toolbar">
+        <button type="button" class="primary" id="pick">Выбрать папку</button>
+        <button type="button" id="xmlArchive">XML-архив инт.номеров</button>
+        <input id="xmlIn" type="file" accept=".zip,.rar,.7z,application/zip" hidden>
+        <span id="files"></span>
+      </div>
+      <label class="kicker" for="num">Номера актов</label>
+      <input id="num" class="numbox" type="text" placeholder="123 или 1 2 6-9 80-90" disabled>
+      <div class="toolbar" style="margin-top:12px">
+        <button type="button" class="primary" id="go" disabled>Сформировать акт</button>
+        <button type="button" id="pdfBtn" disabled>Сделать PDF страницу</button>
+        <button type="button" id="coverBtn">Сделать обложку</button>
+        <button type="button" id="journalBtn">Создать журнал</button>
+        <span class="kicker" id="hint"></span>
+      </div>
+    </section>
+    <div id="out"></div>
+    <div id="open"></div>
+  <input id="photoIn" type="file" accept="image/*" hidden>
+  </main>
+  <footer>
+    <span>Шаблон встроен. Выгрузка: выгрузка.xlsx или document*.xls(x). Фото 123_1 и 123_2 необязательны.</span>
+    <span style="opacity:.7">версия 1.0 (при внесении изменений число после точки должно увеличиваться на 1)</span>
+    <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
+  </footer>
+  <script src="./sborka.js?v=18"></script>
+  <script src="./hub-nav.js?v=9"></script>
+</body>
+</html>
