@@ -166,6 +166,26 @@
       "messageId": "<a2254d6a-089c-414f-62f8-f63dcb944362@mis-k.ru>",
       "error": "",
       "attempts": 1
+    },
+    "2026-10-28": {
+      "workers": 13,
+      "itr": 5,
+      "tech": 4,
+      "sum": 22,
+      "locked": true,
+      "status": "sent",
+      "note": "",
+      "sentAt": "2026-10-28T07:27:48.916Z",
+      "to": [
+        "rahmatullin.rr@mis-k.ru"
+      ],
+      "cc": [
+        "renrahman@gmail.com"
+      ],
+      "filename": "Акт фиксации ТТР 28.10.2026.pdf",
+      "messageId": "<cef12939-7bf2-be65-7ca0-7e90324f4408@mis-k.ru>",
+      "error": "",
+      "attempts": 1
     }
   }
 }
