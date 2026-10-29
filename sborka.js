@@ -1,4 +1,4 @@
-/* v1.2 */
+/* v1.3 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -195,47 +195,6 @@ async function saveIntMap() {
   await w.close();
 }
 
-async function parseXmlArchive(file) {
-  const zip = await JSZip.loadAsync(file);
-  const map = {};
-  const xmlFiles = [];
-  zip.forEach((path, entry) => {
-    if (!entry.dir && path.toLowerCase().endsWith(".xml")) xmlFiles.push({ path, entry });
-  });
-  for (const { path, entry } of xmlFiles) {
-    const xmlText = await entry.async("string");
-    const m = xmlText.match(/defectNumber[^>]*>([^<]+)/i);
-    if (!m) continue;
-    const intNo = m[1].trim();
-    if (!intNo) continue;
-    const folder = path.split("/")[0] || "";
-    const fm = folder.match(/(\d+)/);
-    if (!fm) continue;
-    map[fm[1]] = intNo;
-  }
-  return map;
-}
-
-$("xmlIn").addEventListener("change", async () => {
-  const file = $("xmlIn").files && $("xmlIn").files[0];
-  if (!file || !dirHandle) { alert("Сначала выбери папку"); return; }
-  $("hint").textContent = "Разбираю архив…";
-  try {
-    const newMap = await parseXmlArchive(file);
-    Object.assign(intMap, newMap);
-    await saveIntMap();
-    await loadIntMap();
-    await loadOpen();
-    await loadIntMap();
-    renderOpen();
-    $("hint").textContent = "Загружено интеграционных: " + Object.keys(newMap).length;
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Интеграционные номера сохранены (' + Object.keys(newMap).length + ')</div>');
-  } catch (e) {
-    $("hint").textContent = "";
-    alert("Ошибка разбора: " + e.message);
-  }
-  $("xmlIn").value = "";
-});
 
 let commentTimers = {};
 function scheduleComment(n, field, value) {
