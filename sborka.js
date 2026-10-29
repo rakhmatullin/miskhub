@@ -1,4 +1,4 @@
-/* v2.1 */
+/* v2.2 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -776,7 +776,7 @@ async function makeCoverPdf(nos) {
     const info = await lookup(n);
     const intn = info.ok ? (info.act.integration || "—") : "—";
     const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
-    const descMax = 48;
+    const descMax = 52;
     let desc1 = descFull.slice(0, descMax);
     let desc2 = "";
     if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
@@ -853,20 +853,7 @@ $("pdfBtn").addEventListener("click", async () => {
   }
 });
 
-$("coverBtn").addEventListener("click", async () => {
-  let nos = expandNumbers($("num").value);
-  if (!nos.length) nos = openRows.map(r => r.act_no);
-  if (!nos.length) { alert("Нет номеров"); return; }
-  $("hint").textContent = "Делаю обложку…";
-  try {
-    const bytes = await makeCoverPdf(nos);
-    await downloadPdf(bytes, "обложка.pdf");
-    $("hint").textContent = "Обложка готова";
-  } catch (e) {
-    $("hint").textContent = "";
-    alert(e.message);
-  }
-});
+
 
 $("journalBtn").addEventListener("click", async () => {
   const nos = openRows.map(r => r.act_no);
@@ -902,7 +889,7 @@ $("journalBtn").addEventListener("click", async () => {
       const info = await lookup(n);
       const intn = info.ok ? (info.act.integration || "—") : "—";
       const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
-    const descMax = 48;
+    const descMax = 52;
     let desc1 = descFull.slice(0, descMax);
     let desc2 = "";
     if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
@@ -910,8 +897,8 @@ $("journalBtn").addEventListener("click", async () => {
       const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
       coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
       coverPage.drawText(String(intn), { x: 55, y: cy, size: 7, font });
-      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 230 });
-      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 230 });
+      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 235 });
+      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 235 });
       const before = findPhotoEntry(entries, n, 1);
       const after = findPhotoEntry(entries, n, 2);
       let px = 330;
