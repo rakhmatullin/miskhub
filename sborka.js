@@ -1,4 +1,4 @@
-/* v1.6 */
+/* v1.7 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -872,26 +872,50 @@ $("journalBtn").addEventListener("click", async () => {
     const c1n = (colNames && colNames.c1) || "Комментарий";
     const c2n = (colNames && colNames.c2) || "Примечание";
     coverPage.drawText("№", { x: 30, y: cy, size: 8, font });
-    coverPage.drawText("Инт. №", { x: 60, y: cy, size: 8, font });
-    coverPage.drawText("Описание", { x: 115, y: cy, size: 8, font });
-    coverPage.drawText(c1n.slice(0, 12), { x: 340, y: cy, size: 8, font });
-    coverPage.drawText(c2n.slice(0, 12), { x: 455, y: cy, size: 8, font });
+    coverPage.drawText("Инт. №", { x: 55, y: cy, size: 8, font });
+    coverPage.drawText("Описание", { x: 100, y: cy, size: 8, font });
+    coverPage.drawText("Фото", { x: 280, y: cy, size: 8, font });
+    coverPage.drawText(c1n.slice(0, 10), { x: 360, y: cy, size: 8, font });
+    coverPage.drawText(c2n.slice(0, 10), { x: 480, y: cy, size: 8, font });
     cy -= 4;
     coverPage.drawLine({ start: { x: 30, y: cy }, end: { x: 565, y: cy }, thickness: 0.5 });
     cy -= 11;
-    const rowH = Math.max(9, Math.min(14, (cy - 28) / Math.max(nos.length, 1)));
+    const rowH = Math.max(10, Math.min(14, (cy - 28) / Math.max(nos.length, 1)));
+    const thumbH = Math.min(rowH - 2, 12);
+    const entries = await listEntries();
     for (const n of nos) {
       if (cy < 28) break;
       const info = await lookup(n);
       const intn = info.ok ? (info.act.integration || "—") : "—";
-      const desc = info.ok ? (info.act.description || "").slice(0, 42) : "";
+      const desc = info.ok ? (info.act.description || "").slice(0, 36) : "";
       const raw = comments[String(n)];
       const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
       coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
-      coverPage.drawText(String(intn), { x: 60, y: cy, size: 7, font });
-      coverPage.drawText(desc, { x: 115, y: cy, size: 7, font, maxWidth: 215 });
-      coverPage.drawText((cc.c1 || "").slice(0, 22), { x: 340, y: cy, size: 7, font, maxWidth: 110 });
-      coverPage.drawText((cc.c2 || "").slice(0, 22), { x: 455, y: cy, size: 7, font, maxWidth: 110 });
+      coverPage.drawText(String(intn), { x: 55, y: cy, size: 7, font });
+      coverPage.drawText(desc, { x: 100, y: cy, size: 7, font, maxWidth: 170 });
+      const before = findPhotoEntry(entries, n, 1);
+      const after = findPhotoEntry(entries, n, 2);
+      let px = 280;
+      for (const e of [before, after]) {
+        if (e) {
+          try {
+            const file = await e.handle.getFile();
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            let img;
+            try { img = await journal.embedJpg(bytes); }
+            catch (_) { try { img = await journal.embedPng(bytes); } catch (__) { img = null; } }
+            if (img) {
+              const scale = Math.min(thumbH / img.height, 16 / img.width, 1);
+              const dw = img.width * scale;
+              const dh = img.height * scale;
+              coverPage.drawImage(img, { x: px, y: cy - 2, width: dw, height: dh });
+            }
+          } catch (_) {}
+        }
+        px += 18;
+      }
+      coverPage.drawText((cc.c1 || "").slice(0, 18), { x: 360, y: cy, size: 7, font, maxWidth: 110 });
+      coverPage.drawText((cc.c2 || "").slice(0, 18), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
       cy -= rowH;
     }
     // act pages
@@ -965,6 +989,7 @@ restoreFolder().then(() => loadOpen().then(() => { renderOpen(); wireSlots(); })
 
 function wireSlots() {
   document.querySelectorAll("[data-pick]").forEach((el) => {
+    if (el.dataset.full) return; // photos with data-full open fullscreen via document listener
     el.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const [n, slot] = el.dataset.pick.split(":");
