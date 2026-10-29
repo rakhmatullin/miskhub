@@ -1,4 +1,4 @@
-/* v1.3 */
+/* v1.4 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -114,13 +114,10 @@ async function embeddedTemplate() {
   return bytes.buffer;
 }
 async function refreshFiles() {
-  if (!dirHandle) { $("files").innerHTML = pill("папка не выбрана", "bad"); return; }
+  if (!dirHandle) { $("files").innerHTML = ""; return; }
   const entries = await listEntries();
   const dump = await findDumpFile(entries);
-  const template = await fileByName(entries, "shablon-akt.docx");
-  $("files").innerHTML =
-    pill(template ? "свой шаблон в папке" : "встроенный шаблон", "ok") +
-    pill(dump ? "выгрузка на месте" : "нет выгрузки / document*.xls", dump ? "ok" : "bad");
+  $("files").innerHTML = "";
   $("num").disabled = !dump;
 }
 async function lookup(n) {
@@ -413,8 +410,10 @@ function slotHtml(n, slot, label, name, url) {
   const img = url
     ? '<img src="' + url + '" alt="">'
     : '<div class="ph">Добавить фото ' + label + '</div>';
-  const btn = url ? '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">Заменить</button>' : "";
-  return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img + btn +
+  const fullBtn = url ? '<button type="button" class="full" data-full="' + url + '">На весь экран</button>' : "";
+  const chgBtn = '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">' + (url ? "Заменить" : "Добавить") + '</button>';
+  return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img +
+    '<div class="btns">' + fullBtn + chgBtn + '</div>' +
     '<figcaption class="kicker">' + label + " · " + (name || "нет " + n + "_" + slot) + "</figcaption></figure>";
 }
 async function toJpeg(file) {
@@ -691,28 +690,33 @@ async function makeActPdf(n) {
         const y = photoTop - dh;
         if (y > midY - 10) {
           page.drawImage(img, { x, y, width: dw, height: dh });
-          page.drawText(slots[i].label, { x: x + dw / 2 - 10, y: y - 11, size: 8, font });
+          
         }
       } catch (err) { console.warn("photo", n, err); }
     }
   }
-  let y = midY - 24;
-  page.drawText("Устранённые замечания:", { x: 40, y, size: 11, font });
-  y -= 16;
+  let y = midY - 16;
+  page.drawText("Описание:", { x: 40, y, size: 11, font });
+  y -= 14;
   let rest = (info.act.description || "—");
-  const maxChars = 90;
-  while (rest && y > 60) {
+  const maxChars = 85;
+  const bottomLimit = 70;
+  while (rest && y > bottomLimit) {
     let line = rest.slice(0, maxChars);
     if (rest.length > maxChars) {
       const cut = line.lastIndexOf(" ");
-      if (cut > 40) line = line.slice(0, cut);
+      if (cut > 30) line = line.slice(0, cut);
     }
-    page.drawText(line, { x: 40, y, size: 10, font, maxWidth: 515 });
+    page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
     rest = rest.slice(line.length).trimStart();
-    y -= 14;
+    y -= 12;
   }
-  y -= 8;
-  page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 9, font });
+  if (rest && y > bottomLimit) {
+    page.drawText(rest.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
+    y -= 12;
+  }
+  y -= 6;
+  if (y > 40) page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
   y -= 14;
   const raw = comments[String(n)];
   const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
@@ -731,8 +735,8 @@ async function makeCoverPdf(nos) {
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(await getCyrFont(), { subset: false });
   const bold = font;
-  page.drawText("Обложка актов об устранении", { x: 30, y: 810, size: 13, font: bold });
-  page.drawText("Незакрытых (к устранению): " + nos.length, { x: 30, y: 792, size: 10, font });
+  page.drawText("Устранение нарушений", { x: 30, y: 810, size: 14, font: bold });
+  page.drawText("Всего: " + nos.length, { x: 30, y: 792, size: 10, font });
   let y = 770;
   const c1n = (colNames && colNames.c1) || "Комментарий";
   const c2n = (colNames && colNames.c2) || "Примечание";
@@ -826,8 +830,8 @@ $("journalBtn").addEventListener("click", async () => {
     const font = await journal.embedFont(fontBytes, { subset: false });
     // cover page
     const coverPage = journal.addPage([595, 842]);
-    coverPage.drawText("Обложка актов об устранении", { x: 30, y: 810, size: 13, font });
-    coverPage.drawText("Незакрытых (к устранению): " + nos.length, { x: 30, y: 792, size: 10, font });
+    coverPage.drawText("Устранение нарушений", { x: 30, y: 810, size: 14, font });
+    coverPage.drawText("Всего: " + nos.length, { x: 30, y: 792, size: 10, font });
     let cy = 770;
     const c1n = (colNames && colNames.c1) || "Комментарий";
     const c2n = (colNames && colNames.c2) || "Примечание";
@@ -889,13 +893,13 @@ $("journalBtn").addEventListener("click", async () => {
               const y = photoTop - dh;
               if (y > midY - 10) {
                 page.drawImage(img, { x, y, width: dw, height: dh });
-                page.drawText(slots[i].label, { x: x + dw / 2 - 10, y: y - 11, size: 8, font });
+                
               }
             } catch (err) { console.warn("jphoto", n, err); }
           }
         }
         let y = midY - 20;
-        page.drawText("Устранённые замечания:", { x: 40, y, size: 11, font });
+        page.drawText("Описание:", { x: 40, y, size: 11, font });
         y -= 16;
         let rest = (info.act.description || "—");
         const maxChars = 90;
@@ -951,4 +955,17 @@ $("photoIn").addEventListener("change", async () => {
     $("hint").textContent = "";
     $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + (e.message || "Не удалось сохранить фото.") + "</div>");
   }
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-full]");
+  if (!btn) return;
+  e.stopPropagation();
+  const url = btn.dataset.full;
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center";
+  overlay.innerHTML = '<img src="' + url + '" style="max-width:96%;max-height:96%;object-fit:contain"><button style="position:absolute;top:12px;right:12px;background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Закрыть</button>';
+  overlay.querySelector("button").onclick = () => overlay.remove();
+  overlay.onclick = (ev) => { if (ev.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
 });
