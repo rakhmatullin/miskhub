@@ -72,7 +72,7 @@
       if (file === "index.html") return /\/$/.test(path) || /\/index\.html$/.test(path) || /\/miskhub$/.test(path);
       return path.indexOf("/" + file) !== -1;
     }
-    var items = [["index.html", "Граф"], ["sborka.html", "Акты"], ["sverka-vesov.html", "Веса"], ["ttr.html", "Акт ТТР"]];
+    var items = [];
     nav.innerHTML = items.map(function (it) {
       return '<a href="./' + it[0] + '"' + (on(it[0]) ? ' class="on"' : "") + ">" + it[1] + "</a>";
     }).join("");
