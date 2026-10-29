@@ -1,4 +1,4 @@
-/* v2.4 */
+/* v2.5 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -438,16 +438,17 @@ async function toJpeg(file) {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), w: bmp.width, h: bmp.height };
 }
 function drawingXml(rid, docId, name, cx, cy) {
-  return '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+  return '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:drawing>' +
+    '<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
     '<wp:extent cx="' + cx + '" cy="' + cy + '"/>' +
     '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
     '<wp:docPr id="' + docId + '" name="' + name + '"/>' +
-    '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
-    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + docId + '" name="' + name + '"/><pic:cNvPicPr><a:picLocks noChangeAspect="1"/></pic:cNvPicPr></pic:nvPicPr>' +
+    '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
+    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic><pic:nvPicPr><pic:cNvPr id="' + docId + '" name="' + name + '"/><pic:cNvPicPr><a:picLocks noChangeAspect="1"/></pic:cNvPicPr></pic:nvPicPr>' +
     '<pic:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
-    "</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>";
+    '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
 function appXml() {
   return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
@@ -503,7 +504,7 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
     photos += drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w));
     relsExtra += "rId14 ";
   }
-  if (photos) photos = photos;
+  if (photos) photos = appXml() + photos;
   if (!xml.includes("<w:sectPr")) throw new Error("В шаблоне нет раздела страницы.");
   xml = xml.replace("<w:sectPr", photos + "<w:sectPr");
   zip.file("word/document.xml", xml);
@@ -544,16 +545,15 @@ async function saveAct(n) {
   });
   const name = actName(n, info.act.integration);
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
+  const a = iframe.contentDocument.createElement("a");
   a.href = url;
   a.download = name;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  setTimeout(() => {
-    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-  }, 0);
+  iframe.contentDocument.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url); }, 500);
   return name;
 }
 async function pickFolder() {
