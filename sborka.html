@@ -36,35 +36,33 @@
       position: absolute; right: 8px; bottom: 28px; background: #000c; color: #fff;
       border: 0; border-radius: 8px; padding: 4px 8px; font-size: 11px; cursor: pointer;
     }
-    .open-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .table th, .table td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
-    .table th { color: var(--mute); font-weight: 600; }
-    .table .num { cursor: pointer; color: var(--accent, #6ea8fe); font-weight: 700; }
-    .table .desc { max-width: 280px; }
-    .table textarea.cmt { width: 100%; min-width: 100px; background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; resize: vertical; }
-    footer { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; padding: 16px 0; margin-top: 24px; border-top: 1px solid var(--line); font-size: 12px; color: var(--mute); }
+    .open-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .open-head .kicker { margin: 0; }
+    table.open { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.open th, table.open td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+    table.open th { color: var(--mute); font-weight: 500; }
+    .comment-cell input { width: 100%; background: #09111e; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 4px 6px; font-size: 12px; }
   </style>
 </head>
 <body>
-  <div id="hub-nav"></div>
-  <main class="wrap">
-    <header class="hero">
-      <div>
-        <p class="kicker">MiskHub · инструмент</p>
-        <h1>Сборка актов</h1>
-        <p class="lead">Выбери папку с выгрузкой и фото. Сформируй акт, PDF-страницу, обложку или журнал.</p>
-      </div>
-    </header>
-
+  <header class="top">
+    <a class="brand" href="./"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="" width="15" height="15"><span>MiskHub</span></a>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">GitHub Pages · Chrome или Edge</p>
+      <h1>Сборка актов</h1>
+      <p class="lead">Выбери папку один раз. Введи номер. Дата акта — сегодня. Файл сохранится в ту же папку: <code>Акт об Устранении №123.docx</code>.</p>
+    </section>
+    <div id="files" style="margin:12px 0"></div>
+    <section class="toolbar">
+      <button type="button" id="pick">Выбрать папку</button>
+      <button type="button" id="xmlArchive">Загрузить архив XML</button>
+      <input id="xmlIn" type="file" accept=".zip" hidden>
+      <span class="kicker" id="folder">Папка не выбрана</span>
+    </section>
     <section class="tape-wrap">
-      <div class="toolbar">
-        <button type="button" class="primary" id="pick">Выбрать папку</button>
-        <button type="button" id="xmlArchive">XML-архив инт.номеров</button>
-        <input id="xmlIn" type="file" accept=".zip,.rar,.7z,application/zip" hidden>
-        <span id="files"></span>
-      </div>
-      <label class="kicker" for="num">Номера актов</label>
+      <label class="kicker" for="num">Номер акта</label>
       <input id="num" class="numbox" type="text" placeholder="123 или 1 2 6-9 80-90" disabled>
       <div class="toolbar" style="margin-top:12px">
         <button type="button" class="primary" id="go" disabled>Сформировать акт</button>
@@ -83,7 +81,7 @@
     <span style="opacity:.7">версия 1.0 (при внесении изменений число после точки должно увеличиваться на 1)</span>
     <a href="https://github.com/rakhmatullin/miskhub">github.com/rakhmatullin/miskhub</a>
   </footer>
-  <script src="./sborka.js?v=18"></script>
+  <script src="./sborka.js?v=19"></script>
   <script src="./hub-nav.js?v=9"></script>
 </body>
 </html>
