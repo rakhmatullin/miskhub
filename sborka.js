@@ -1,4 +1,4 @@
-/* v1.5 */
+/* v1.6 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -388,7 +388,7 @@ async function renderOpen() {
     '<p class="kicker">новые: ' + (sequences.new.join(", ") || "—") + '</p>' +
     '</section>';
   host.insertAdjacentHTML("beforeend", seqHtml);
-
+  wireSlots();
 }
 
 function render(d) {
@@ -752,26 +752,51 @@ async function makeCoverPdf(nos) {
   const c1n = (colNames && colNames.c1) || "Комментарий";
   const c2n = (colNames && colNames.c2) || "Примечание";
   page.drawText("№", { x: 30, y, size: 8, font: bold });
-  page.drawText("Инт. №", { x: 60, y, size: 8, font: bold });
-  page.drawText("Описание", { x: 115, y, size: 8, font: bold });
-  page.drawText(c1n.slice(0, 12), { x: 340, y, size: 8, font: bold });
-  page.drawText(c2n.slice(0, 12), { x: 455, y, size: 8, font: bold });
+  page.drawText("Инт. №", { x: 55, y, size: 8, font: bold });
+  page.drawText("Описание", { x: 100, y, size: 8, font: bold });
+  page.drawText("Фото", { x: 280, y, size: 8, font: bold });
+  page.drawText(c1n.slice(0, 10), { x: 360, y, size: 8, font: bold });
+  page.drawText(c2n.slice(0, 10), { x: 480, y, size: 8, font: bold });
   y -= 4;
   page.drawLine({ start: { x: 30, y }, end: { x: 565, y }, thickness: 0.5 });
   y -= 11;
-  const rowH = Math.max(9, Math.min(14, (y - 28) / Math.max(nos.length, 1)));
+  const rowH = Math.max(10, Math.min(14, (y - 28) / Math.max(nos.length, 1)));
+  const thumbH = Math.min(rowH - 2, 12);
+  const entries = await listEntries();
   for (const n of nos) {
     if (y < 28) break;
     const info = await lookup(n);
     const intn = info.ok ? (info.act.integration || "—") : "—";
-    const desc = info.ok ? (info.act.description || "").slice(0, 42) : "";
+    const desc = info.ok ? (info.act.description || "").slice(0, 36) : "";
     const raw = comments[String(n)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
     page.drawText(String(n), { x: 30, y, size: 7, font });
-    page.drawText(String(intn), { x: 60, y, size: 7, font });
-    page.drawText(desc, { x: 115, y, size: 7, font, maxWidth: 215 });
-    page.drawText((cc.c1 || "").slice(0, 22), { x: 340, y, size: 7, font, maxWidth: 110 });
-    page.drawText((cc.c2 || "").slice(0, 22), { x: 455, y, size: 7, font, maxWidth: 110 });
+    page.drawText(String(intn), { x: 55, y, size: 7, font });
+    page.drawText(desc, { x: 100, y, size: 7, font, maxWidth: 170 });
+    // mini photos
+    const before = findPhotoEntry(entries, n, 1);
+    const after = findPhotoEntry(entries, n, 2);
+    let px = 280;
+    for (const e of [before, after]) {
+      if (e) {
+        try {
+          const file = await e.handle.getFile();
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let img;
+          try { img = await pdf.embedJpg(bytes); }
+          catch (_) { try { img = await pdf.embedPng(bytes); } catch (__) { img = null; } }
+          if (img) {
+            const scale = Math.min(thumbH / img.height, 16 / img.width, 1);
+            const dw = img.width * scale;
+            const dh = img.height * scale;
+            page.drawImage(img, { x: px, y: y - 2, width: dw, height: dh });
+          }
+        } catch (_) {}
+      }
+      px += 18;
+    }
+    page.drawText((cc.c1 || "").slice(0, 18), { x: 360, y, size: 7, font, maxWidth: 110 });
+    page.drawText((cc.c2 || "").slice(0, 18), { x: 480, y, size: 7, font, maxWidth: 80 });
     y -= rowH;
   }
   return await pdf.save();
@@ -936,7 +961,7 @@ $("journalBtn").addEventListener("click", async () => {
   }
 });
 
-restoreFolder().then(() => loadOpen().then(renderOpen));
+restoreFolder().then(() => loadOpen().then(() => { renderOpen(); wireSlots(); }));
 
 function wireSlots() {
   document.querySelectorAll("[data-pick]").forEach((el) => {
