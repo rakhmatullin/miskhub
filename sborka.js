@@ -1,11 +1,79 @@
-/* MiskHub sborka v1.0 loader */
-(async function () {
-  const BASE = "https://raw.githubusercontent.com/Rakhmatullin/miskhub/89dffaa35d1d42b5ef8d7dcbc469a9627bf3959e/sborka.js";
-  let src = await (await fetch(BASE + "?v=19")).text();
+/* MiskHub sborka — сборка акта на GitHub Pages */
+const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
+const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const CX = 5240000;
+const TPL_URL = "./shablon-akt.b64";
 
-  src = src.replace(
-    /async function fileByName\(entries, name\) \{[\s\S]*?return hit \? hit\.handle\.getFile\(\) : null;\n\}/,
-    `async function fileByName(entries, name) {
+const $ = (id) => document.getElementById(id);
+let dirHandle = null;
+let ready = false;
+let timer = null;
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function xmlEscape(s) {
+  return String(s)
+    .replace(/&/g, "\u0026amp;")
+    .replace(/</g, "\u0026lt;")
+    .replace(/>/g, "\u0026gt;");
+}
+function ruQuoted(d) {
+  const [dd, mm, yy] = d.split(".");
+  return "«" + dd + "» " + MONTHS[Number(mm)] + " " + yy;
+}
+function todayStr() {
+  const d = new Date();
+  return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
+}
+function asDateStr(val) {
+  if (val == null || val === "") return null;
+  if (val instanceof Date && !isNaN(val)) return pad(val.getDate()) + "." + pad(val.getMonth() + 1) + "." + val.getFullYear();
+  if (typeof val === "number" && val > 20000 && val < 80000) {
+    const p = XLSX.SSF.parse_date_code(val);
+    if (p) return pad(p.d) + "." + pad(p.m) + "." + p.y;
+  }
+  const m = String(val).trim().match(/(\d{1,2})[.](\d{1,2})[.](\d{4})/);
+  if (!m) return null;
+  return pad(m[1]) + "." + pad(m[2]) + "." + m[3];
+}
+function cleanDeadline(val) {
+  if (val instanceof Date || typeof val === "number") return asDateStr(val);
+  const cut = String(val == null ? "" : val).replace(/\s*\+?\s*\d+\s*дн\.?/i, " ").trim();
+  return asDateStr(cut) || asDateStr(val);
+}
+function parseDump(buf) {
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+  let header = -1, map = {};
+  for (let i = 0; i < Math.min(grid.length, 25); i++) {
+    const vals = {};
+    grid[i].forEach((v, c) => { const key = String(v).trim(); if (key) vals[key] = c; });
+    if ("Номер" in vals && "Статус" in vals) { header = i; map = vals; break; }
+  }
+  if (header < 0) throw new Error("В файле нет таблицы замечаний. Нужна выгрузка с колонками Номер и Статус.");
+  const col = (...names) => { for (const name of names) if (name in map) return map[name]; return -1; };
+  const rows = [];
+  for (let i = header + 1; i < grid.length; i++) {
+    const n = parseInt(String(grid[i][map["Номер"]]).trim(), 10);
+    if (!Number.isFinite(n)) continue;
+    const descCol = col("Описание", "Устраненные замечания");
+    rows.push({
+      act_no: n,
+      status: String(grid[i][map["Статус"]] || "").trim(),
+      pred_date: asDateStr(grid[i][col("Дата")]),
+      deadline: cleanDeadline(grid[i][col("Срок устранения")]),
+      description: descCol < 0 ? "" : String(grid[i][descCol] || "").trim(),
+      integration: col("Интеграционный номер") < 0 ? "" : String(grid[i][col("Интеграционный номер")] || "").trim(),
+    });
+  }
+  return rows;
+}
+async function listEntries() {
+  const out = [];
+  for await (const [name, handle] of dirHandle.entries()) if (handle.kind === "file") out.push({ name, handle });
+  return out;
+}
+async function fileByName(entries, name) {
   const hit = entries.find((e) => e.name.toLowerCase() === name.toLowerCase());
   return hit ? hit.handle.getFile() : null;
 }
@@ -26,131 +94,901 @@ async function findDumpFile(entries) {
     try { await dirHandle.removeEntry(d.entry.name); } catch (_) {}
   }
   return docs[0].file;
-}`
-  );
-  src = src.split('await fileByName(entries, "выгрузка.xlsx")').join("await findDumpFile(entries)");
-  src = src.replace(
-    'pill(dump ? "выгрузка на месте" : "нет выгрузки.xlsx", dump ? "ok" : "bad")',
-    'pill(dump ? "выгрузка на месте" : "нет выгрузки / document*.xls", dump ? "ok" : "bad")'
-  );
-  src = src.replace(
-    'return { ok: false, error: "В папке нет выгрузка.xlsx." };',
-    'return { ok: false, error: "В папке нет выгрузка.xlsx и нет document*.xls(x)." };'
-  );
-  src = src.replace(
-    "for (const [a, b] of Object.entries(map)) xml = xml.split(a).join(b);",
-    `for (const [a, b] of Object.entries(map)) xml = xml.split(a).join(b);
-  xml = xml.split("А.О. Татаринов").join("Р.Р. Рахматов");`
-  );
+}
+function findPhotoEntry(entries, n, slot) {
+  const prefix = (n + "_" + slot + ".").toLowerCase();
+  return entries.find((e) => {
+    const low = e.name.toLowerCase();
+    return low.startsWith(prefix) && PHOTO_EXT.some((ext) => low.endsWith(ext));
+  }) || null;
+}
+function pill(text, cls) { return '<span class="pill ' + (cls || "") + '">' + text + "</span>"; }
+async function embeddedTemplate() {
+  const res = await fetch(TPL_URL);
+  if (!res.ok) throw new Error("Не удалось загрузить встроенный шаблон.");
+  const b64 = (await res.text()).replace(/\s/g, "");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+async function refreshFiles() {
+  if (!dirHandle) { $("files").innerHTML = pill("папка не выбрана", "bad"); return; }
+  const entries = await listEntries();
+  const dump = await findDumpFile(entries);
+  const template = await fileByName(entries, "shablon-akt.docx");
+  $("files").innerHTML =
+    pill(template ? "свой шаблон в папке" : "встроенный шаблон", "ok") +
+    pill(dump ? "выгрузка на месте" : "нет выгрузки / document*.xls", dump ? "ok" : "bad");
+  $("num").disabled = !dump;
+}
+async function lookup(n) {
+  const entries = await listEntries();
+  const dumpFile = await findDumpFile(entries);
+  if (!dumpFile) return { ok: false, error: "В папке нет выгрузка.xlsx и нет document*.xls(x)." };
+  let rows;
+  try { rows = parseDump(await dumpFile.arrayBuffer()); }
+  catch (e) { return { ok: false, error: e.message }; }
+  const act = rows.find((x) => x.act_no === n);
+  if (!act) return { ok: false, error: "Номера " + n + " нет в выгрузке." };
+  const before = findPhotoEntry(entries, n, 1);
+  const after = findPhotoEntry(entries, n, 2);
+  let block = "";
+  if (act.status === "Закрыто") block = "Строка закрыта, акт не собираю.";
+  else if (act.status === "Удалено") block = "Строка удалена, акта нет.";
+  else if (act.status !== "К устранению") block = "Статус «" + (act.status || "пусто") + "» — собираю только «К устранению».";
+  else if (!act.pred_date) block = "В строке нет даты предписания.";
+  else if (!act.deadline) block = "В строке нет срока устранения.";
+  else if (!act.description) block = "В строке нет текста замечания.";
+  if (intMap[String(act.act_no)]) act.integration = intMap[String(act.act_no)];
+  return {
+    ok: true, act, act_date: todayStr(),
+    before: before ? before.name : null, after: after ? after.name : null,
+    beforeUrl: before ? URL.createObjectURL(await before.handle.getFile()) : null,
+    afterUrl: after ? URL.createObjectURL(await after.handle.getFile()) : null,
+    can_build: !block, block,
+  };
+}
 
-  function replaceFunc(src, name, newBody) {
-    const needle = "async function " + name + "(";
-    const start = src.indexOf(needle);
-    if (start < 0) throw new Error("func " + name + " not found");
-    let i = src.indexOf("{", start);
-    let depth = 0;
-    for (; i < src.length; i++) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
-        depth--;
-        if (depth === 0) { i++; break; }
+const COMMENTS_FILE = "комментарии.json";
+let comments = {};
+let openRows = [];
+let dumpDate = "";
+
+async function loadComments() {
+  comments = {};
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, COMMENTS_FILE);
+    if (!f) return;
+    comments = JSON.parse(await f.text()) || {};
+  } catch (_) { comments = {}; }
+}
+async function saveComments() {
+  if (!dirHandle) return;
+  const fh = await dirHandle.getFileHandle(COMMENTS_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(comments, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+
+const INT_MAP_FILE = "интеграционные.json";
+let intMap = {};
+
+async function loadIntMap() {
+  intMap = {};
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, INT_MAP_FILE);
+    if (!f) return;
+    intMap = JSON.parse(await f.text()) || {};
+  } catch (_) { intMap = {}; }
+}
+async function saveIntMap() {
+  if (!dirHandle) return;
+  const fh = await dirHandle.getFileHandle(INT_MAP_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(intMap, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+
+async function parseXmlArchive(file) {
+  const zip = await JSZip.loadAsync(file);
+  const map = {};
+  const xmlFiles = [];
+  zip.forEach((path, entry) => {
+    if (!entry.dir && path.toLowerCase().endsWith(".xml")) xmlFiles.push({ path, entry });
+  });
+  for (const { path, entry } of xmlFiles) {
+    const xmlText = await entry.async("string");
+    const m = xmlText.match(/defectNumber[^>]*>([^<]+)/i);
+    if (!m) continue;
+    const intNo = m[1].trim();
+    if (!intNo) continue;
+    const folder = path.split("/")[0] || "";
+    const fm = folder.match(/(\d+)/);
+    if (!fm) continue;
+    map[fm[1]] = intNo;
+  }
+  return map;
+}
+
+$("xmlIn").addEventListener("change", async () => {
+  const file = $("xmlIn").files && $("xmlIn").files[0];
+  if (!file || !dirHandle) { alert("Сначала выбери папку"); return; }
+  $("hint").textContent = "Разбираю архив…";
+  try {
+    const newMap = await parseXmlArchive(file);
+    Object.assign(intMap, newMap);
+    await saveIntMap();
+    await loadIntMap();
+    await loadOpen();
+    await loadIntMap();
+    renderOpen();
+    $("hint").textContent = "Загружено интеграционных: " + Object.keys(newMap).length;
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Интеграционные номера сохранены (' + Object.keys(newMap).length + ')</div>');
+  } catch (e) {
+    $("hint").textContent = "";
+    alert("Ошибка разбора: " + e.message);
+  }
+  $("xmlIn").value = "";
+});
+
+let commentTimers = {};
+function scheduleComment(n, field, value) {
+  const key = String(n);
+  if (!comments[key] || typeof comments[key] !== "object") {
+    comments[key] = { c1: (typeof comments[key] === "string" ? comments[key] : ""), c2: "" };
+  }
+  comments[key][field || "c1"] = value;
+  clearTimeout(commentTimers[key + (field || "c1")]);
+  commentTimers[key + (field || "c1")] = setTimeout(() => saveComments().catch(() => {}), 400);
+}
+async function savePhoto(n, slot, file) {
+  const jpeg = await toJpeg(file);
+  const name = n + "_" + slot + ".jpg";
+  const entries = await listEntries();
+  const old = findPhotoEntry(entries, n, slot);
+  if (old && old.name !== name) {
+    try { await dirHandle.removeEntry(old.name); } catch (_) {}
+  }
+  const fh = await dirHandle.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(jpeg.bytes);
+  await w.close();
+}
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+const SEQ_FILE = "последовательности_актов.json";
+let sequences = { open: [], closed: [], new: [] };
+
+async function loadSequences() {
+  sequences = { open: [], closed: [], new: [] };
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, SEQ_FILE);
+    if (!f) return;
+    const data = JSON.parse(await f.text()) || {};
+    sequences.open = Array.isArray(data.open) ? data.open : [];
+    sequences.closed = Array.isArray(data.closed) ? data.closed : [];
+    sequences.new = Array.isArray(data.new) ? data.new : [];
+  } catch (_) { sequences = { open: [], closed: [], new: [] }; }
+}
+
+async function saveSequences() {
+  if (!dirHandle) return;
+  const payload = {
+    _comment: "Файл последовательностей актов для нейронки и человека. open — текущие незакрытые номера в порядке первого появления. closed — закрытые в порядке закрытия. new — новые в порядке появления. Логика: при загрузке выгрузки номера, исчезнувшие из open, переносятся в closed; новые из выгрузки добавляются в open и new. Не править вручную без понимания.",
+    open: sequences.open,
+    closed: sequences.closed,
+    new: sequences.new
+  };
+  const fh = await dirHandle.getFileHandle(SEQ_FILE, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  await w.close();
+}
+
+async function updateSequences() {
+  await loadSequences();
+  const current = openRows.map(r => r.act_no);
+  const currentSet = new Set(current);
+  if (sequences.open.length === 0 && sequences.closed.length === 0 && sequences.new.length === 0) {
+    sequences.open = [...current];
+    sequences.closed = [];
+    sequences.new = [];
+  } else {
+    // numbers in open that disappeared from dump → move to closed
+    const stillOpen = [];
+    for (const n of sequences.open) {
+      if (currentSet.has(n)) stillOpen.push(n);
+      else sequences.closed.push(n);
+    }
+    sequences.open = stillOpen;
+    // numbers in dump not in open → add to open and new
+    const openSet = new Set(sequences.open);
+    for (const n of current) {
+      if (!openSet.has(n)) {
+        sequences.open.push(n);
+        sequences.new.push(n);
+        openSet.add(n);
       }
     }
-    return src.slice(0, start) + newBody + src.slice(i);
   }
+  await saveSequences();
+}
 
-  src = replaceFunc(src, "makeActPdf", atob(
-"YXN5bmMgZnVuY3Rpb24gbWFrZUFjdFBkZihuKSB7CiAgY29uc3QgaW5mbyA9IGF3YWl0IGxvb2t1cChu" +
-    "KTsKICBpZiAoIWluZm8ub2sgfHwgIWluZm8uY2FuX2J1aWxkKSB0aHJvdyBuZXcgRXJyb3IoaW5mby5i" +
-    "bG9jayB8fCBpbmZvLmVycm9yKTsKICBjb25zdCB7IFBERkRvY3VtZW50IH0gPSBQREZMaWI7CiAgY29u" +
-    "c3QgcGRmID0gYXdhaXQgUERGRG9jdW1lbnQuY3JlYXRlKCk7CiAgcGRmLnJlZ2lzdGVyRm9udGtpdChm" +
-    "b250a2l0KTsKICBjb25zdCBwYWdlID0gcGRmLmFkZFBhZ2UoWzU5NSwgODQyXSk7CiAgY29uc3QgZm9u" +
-    "dCA9IGF3YWl0IHBkZi5lbWJlZEZvbnQoYXdhaXQgZ2V0Q3lyRm9udCgpKTsKICBjb25zdCBXID0gNTk1" +
-    "LCBIID0gODQyOwogIGNvbnN0IG1pZFkgPSBIIC8gMjsKICBjb25zdCB0b3BNYXJnaW4gPSA1MCAqIDIu" +
-    "ODM0NjU7CiAgY29uc3QgcGhvdG9NYXhIID0gbWlkWSAtIHRvcE1hcmdpbiAtIDE0OwogIGNvbnN0IHBo" +
-    "b3RvTWF4VyA9IFcgLSA2MDsKICBwYWdlLmRyYXdUZXh0KCLQkNC60YIg0L7QsSDRg9GB0YLRgNCw0L3Q" +
-    "tdC90LjQuCDihJYgIiArIG4sIHsgeDogNDAsIHk6IEggLSAzNiwgc2l6ZTogMTQsIGZvbnQgfSk7CiAg" +
-    "Y29uc3QgaW50biA9IGluZm8uYWN0LmludGVncmF0aW9uIHx8ICIiOwogIGlmIChpbnRuKSBwYWdlLmRy" +
-    "YXdUZXh0KCLQmNC90YIuIOKEliAiICsgaW50biwgeyB4OiA0MCwgeTogSCAtIDUyLCBzaXplOiA5LCBm" +
-    "b250IH0pOwogIGNvbnN0IGVudHJpZXMgPSBhd2FpdCBsaXN0RW50cmllcygpOwogIGNvbnN0IGJlZm9y" +
-    "ZSA9IGZpbmRQaG90b0VudHJ5KGVudHJpZXMsIG4sIDEpOwogIGNvbnN0IGFmdGVyID0gZmluZFBob3Rv" +
-    "RW50cnkoZW50cmllcywgbiwgMik7CiAgY29uc3Qgc2xvdHMgPSBbXTsKICBpZiAoYmVmb3JlKSBzbG90" +
-    "cy5wdXNoKHsgZTogYmVmb3JlLCBsYWJlbDogItCU0J4iIH0pOwogIGlmIChhZnRlcikgc2xvdHMucHVz" +
-    "aCh7IGU6IGFmdGVyLCBsYWJlbDogItCf0J7QodCb0JUiIH0pOwogIGlmIChzbG90cy5sZW5ndGgpIHsK" +
-    "ICAgIGNvbnN0IGdhcCA9IDEyOwogICAgY29uc3Qgc2xvdFcgPSAocGhvdG9NYXhXIC0gKHNsb3RzLmxl" +
-    "bmd0aCAtIDEpICogZ2FwKSAvIHNsb3RzLmxlbmd0aDsKICAgIGZvciAobGV0IGkgPSAwOyBpIDwgc2xv" +
-    "dHMubGVuZ3RoOyBpKyspIHsKICAgICAgdHJ5IHsKICAgICAgICBjb25zdCBieXRlcyA9IG5ldyBVaW50" +
-    "OEFycmF5KGF3YWl0IChhd2FpdCBzbG90c1tpXS5lLmhhbmRsZS5nZXRGaWxlKCkpLmFycmF5QnVmZmVy" +
-    "KCkpOwogICAgICAgIGxldCBpbWc7CiAgICAgICAgdHJ5IHsgaW1nID0gYXdhaXQgcGRmLmVtYmVkSnBn" +
-    "KGJ5dGVzKTsgfSBjYXRjaCAoXykgeyBpbWcgPSBhd2FpdCBwZGYuZW1iZWRQbmcoYnl0ZXMpOyB9CiAg" +
-    "ICAgICAgY29uc3Qgc2NhbGUgPSBNYXRoLm1pbihzbG90VyAvIGltZy53aWR0aCwgcGhvdG9NYXhIIC8g" +
-    "aW1nLmhlaWdodCk7CiAgICAgICAgY29uc3QgZHcgPSBpbWcud2lkdGggKiBzY2FsZSwgZGggPSBpbWcu" +
-    "aGVpZ2h0ICogc2NhbGU7CiAgICAgICAgY29uc3QgeCA9IDMwICsgaSAqIChzbG90VyArIGdhcCkgKyAo" +
-    "c2xvdFcgLSBkdykgLyAyOwogICAgICAgIGNvbnN0IHkgPSBtaWRZICsgODsKICAgICAgICBwYWdlLmRy" +
-    "YXdJbWFnZShpbWcsIHsgeCwgeSwgd2lkdGg6IGR3LCBoZWlnaHQ6IGRoIH0pOwogICAgICAgIHBhZ2Uu" +
-    "ZHJhd1RleHQoc2xvdHNbaV0ubGFiZWwsIHsgeDogeCArIGR3IC8gMiAtIDEyLCB5OiB5IC0gMTIsIHNp" +
-    "emU6IDgsIGZvbnQgfSk7CiAgICAgIH0gY2F0Y2ggKF8pIHt9CiAgICB9CiAgfQogIGxldCB5ID0gbWlk" +
-    "WSAtIDI0OwogIHBhZ2UuZHJhd1RleHQoItCj0YHRgtGA0LDQvdGR0L3QvdGL0LUg0LfQsNC80LXRh9Cw" +
-    "0L3QuNGPOiIsIHsgeDogNDAsIHksIHNpemU6IDExLCBmb250IH0pOwogIHkgLT0gMTY7CiAgbGV0IHJl" +
-    "c3QgPSAoaW5mby5hY3QuZGVzY3JpcHRpb24gfHwgIuKAlCIpOwogIGNvbnN0IG1heENoYXJzID0gOTA7" +
-    "CiAgd2hpbGUgKHJlc3QgJiYgeSA+IDYwKSB7CiAgICBsZXQgbGluZSA9IHJlc3Quc2xpY2UoMCwgbWF4" +
-    "Q2hhcnMpOwogICAgaWYgKHJlc3QubGVuZ3RoID4gbWF4Q2hhcnMpIHsKICAgICAgY29uc3QgY3V0ID0g" +
-    "bGluZS5sYXN0SW5kZXhPZigiICIpOwogICAgICBpZiAoY3V0ID4gNDApIGxpbmUgPSBsaW5lLnNsaWNl" +
-    "KDAsIGN1dCk7CiAgICB9CiAgICBwYWdlLmRyYXdUZXh0KGxpbmUsIHsgeDogNDAsIHksIHNpemU6IDEw" +
-    "LCBmb250LCBtYXhXaWR0aDogNTE1IH0pOwogICAgcmVzdCA9IHJlc3Quc2xpY2UobGluZS5sZW5ndGgp" +
-    "LnRyaW1TdGFydCgpOwogICAgeSAtPSAxNDsKICB9CiAgeSAtPSA4OwogIHBhZ2UuZHJhd1RleHQoItCU" +
-    "0LDRgtCwINC/0YDQtdC00L/QuNGB0LDQvdC40Y86ICIgKyAoaW5mby5hY3QucHJlZF9kYXRlIHx8ICLi" +
-    "gJQiKSArICIgICAg0KHRgNC+0Lo6ICIgKyAoaW5mby5hY3QuZGVhZGxpbmUgfHwgIuKAlCIpLCB7IHg6" +
-    "IDQwLCB5LCBzaXplOiA5LCBmb250IH0pOwogIHkgLT0gMTQ7CiAgY29uc3QgcmF3ID0gY29tbWVudHNb" +
-    "U3RyaW5nKG4pXTsKICBjb25zdCBjYyA9IChyYXcgJiYgdHlwZW9mIHJhdyA9PT0gIm9iamVjdCIpID8g" +
-    "cmF3IDogeyBjMTogcmF3IHx8ICIiLCBjMjogIiIgfTsKICBjb25zdCBjMW4gPSAoY29sTmFtZXMgJiYg" +
-    "Y29sTmFtZXMuYzEpIHx8ICLQmtC+0LzQvNC10L3RgtCw0YDQuNC5IjsKICBjb25zdCBjMm4gPSAoY29s" +
-    "TmFtZXMgJiYgY29sTmFtZXMuYzIpIHx8ICLQn9GA0LjQvNC10YfQsNC90LjQtSI7CiAgaWYgKGNjLmMx" +
-    "IHx8IGNjLmMyKSB7CiAgICBwYWdlLmRyYXdUZXh0KGMxbiArICI6ICIgKyAoY2MuYzEgfHwgIuKAlCIp" +
-    "ICsgIiAgICAiICsgYzJuICsgIjogIiArIChjYy5jMiB8fCAi4oCUIiksIHsgeDogNDAsIHksIHNpemU6" +
-    "IDksIGZvbnQsIG1heFdpZHRoOiA1MTUgfSk7CiAgfQogIHJldHVybiBhd2FpdCBwZGYuc2F2ZSgpOwp9"
-  ));
-  src = replaceFunc(src, "makeCoverPdf", atob(
-"YXN5bmMgZnVuY3Rpb24gbWFrZUNvdmVyUGRmKG5vcykgewogIGNvbnN0IHsgUERGRG9jdW1lbnQgfSA9" +
-    "IFBERkxpYjsKICBjb25zdCBwZGYgPSBhd2FpdCBQREZEb2N1bWVudC5jcmVhdGUoKTsKICBwZGYucmVn" +
-    "aXN0ZXJGb250a2l0KGZvbnRraXQpOwogIGNvbnN0IHBhZ2UgPSBwZGYuYWRkUGFnZShbNTk1LCA4NDJd" +
-    "KTsKICBjb25zdCBmb250ID0gYXdhaXQgcGRmLmVtYmVkRm9udChhd2FpdCBnZXRDeXJGb250KCkpOwog" +
-    "IGNvbnN0IGJvbGQgPSBmb250OwogIHBhZ2UuZHJhd1RleHQoItCe0LHQu9C+0LbQutCwINCw0LrRgtC+" +
-    "0LIg0L7QsSDRg9GB0YLRgNCw0L3QtdC90LjQuCIsIHsgeDogMzAsIHk6IDgxMCwgc2l6ZTogMTMsIGZv" +
-    "bnQ6IGJvbGQgfSk7CiAgcGFnZS5kcmF3VGV4dCgi0J3QtdC30LDQutGA0YvRgtGL0YUgKNC6INGD0YHR" +
-    "gtGA0LDQvdC10L3QuNGOKTogIiArIG5vcy5sZW5ndGgsIHsgeDogMzAsIHk6IDc5Miwgc2l6ZTogMTAs" +
-    "IGZvbnQgfSk7CiAgbGV0IHkgPSA3NzA7CiAgY29uc3QgYzFuID0gKGNvbE5hbWVzICYmIGNvbE5hbWVz" +
-    "LmMxKSB8fCAi0JrQvtC80LzQtdC90YLQsNGA0LjQuSI7CiAgY29uc3QgYzJuID0gKGNvbE5hbWVzICYm" +
-    "IGNvbE5hbWVzLmMyKSB8fCAi0J/RgNC40LzQtdGH0LDQvdC40LUiOwogIHBhZ2UuZHJhd1RleHQoIuKE" +
-    "liIsIHsgeDogMzAsIHksIHNpemU6IDgsIGZvbnQ6IGJvbGQgfSk7CiAgcGFnZS5kcmF3VGV4dCgi0JjQ" +
-    "vdGCLiDihJYiLCB7IHg6IDYwLCB5LCBzaXplOiA4LCBmb250OiBib2xkIH0pOwogIHBhZ2UuZHJhd1Rl" +
-    "eHQoItCe0L/QuNGB0LDQvdC40LUiLCB7IHg6IDExNSwgeSwgc2l6ZTogOCwgZm9udDogYm9sZCB9KTsK" +
-    "ICBwYWdlLmRyYXdUZXh0KGMxbi5zbGljZSgwLCAxMiksIHsgeDogMzQwLCB5LCBzaXplOiA4LCBmb250" +
-    "OiBib2xkIH0pOwogIHBhZ2UuZHJhd1RleHQoYzJuLnNsaWNlKDAsIDEyKSwgeyB4OiA0NTUsIHksIHNp" +
-    "emU6IDgsIGZvbnQ6IGJvbGQgfSk7CiAgeSAtPSA0OwogIHBhZ2UuZHJhd0xpbmUoeyBzdGFydDogeyB4" +
-    "OiAzMCwgeSB9LCBlbmQ6IHsgeDogNTY1LCB5IH0sIHRoaWNrbmVzczogMC41IH0pOwogIHkgLT0gMTE7" +
-    "CiAgY29uc3Qgcm93SCA9IE1hdGgubWF4KDksIE1hdGgubWluKDE0LCAoeSAtIDI4KSAvIE1hdGgubWF4" +
-    "KG5vcy5sZW5ndGgsIDEpKSk7CiAgZm9yIChjb25zdCBuIG9mIG5vcykgewogICAgaWYgKHkgPCAyOCkg" +
-    "YnJlYWs7CiAgICBjb25zdCBpbmZvID0gYXdhaXQgbG9va3VwKG4pOwogICAgY29uc3QgaW50biA9IGlu" +
-    "Zm8ub2sgPyAoaW5mby5hY3QuaW50ZWdyYXRpb24gfHwgIuKAlCIpIDogIuKAlCI7CiAgICBjb25zdCBk" +
-    "ZXNjID0gaW5mby5vayA/IChpbmZvLmFjdC5kZXNjcmlwdGlvbiB8fCAiIikuc2xpY2UoMCwgNDIpIDog" +
-    "IiI7CiAgICBjb25zdCByYXcgPSBjb21tZW50c1tTdHJpbmcobildOwogICAgY29uc3QgY2MgPSAocmF3" +
-    "ICYmIHR5cGVvZiByYXcgPT09ICJvYmplY3QiKSA/IHJhdyA6IHsgYzE6IHJhdyB8fCAiIiwgYzI6ICIi" +
-    "IH07CiAgICBwYWdlLmRyYXdUZXh0KFN0cmluZyhuKSwgeyB4OiAzMCwgeSwgc2l6ZTogNywgZm9udCB9" +
-    "KTsKICAgIHBhZ2UuZHJhd1RleHQoU3RyaW5nKGludG4pLCB7IHg6IDYwLCB5LCBzaXplOiA3LCBmb250" +
-    "IH0pOwogICAgcGFnZS5kcmF3VGV4dChkZXNjLCB7IHg6IDExNSwgeSwgc2l6ZTogNywgZm9udCwgbWF4" +
-    "V2lkdGg6IDIxNSB9KTsKICAgIHBhZ2UuZHJhd1RleHQoKGNjLmMxIHx8ICIiKS5zbGljZSgwLCAyMiks" +
-    "IHsgeDogMzQwLCB5LCBzaXplOiA3LCBmb250LCBtYXhXaWR0aDogMTEwIH0pOwogICAgcGFnZS5kcmF3" +
-    "VGV4dCgoY2MuYzIgfHwgIiIpLnNsaWNlKDAsIDIyKSwgeyB4OiA0NTUsIHksIHNpemU6IDcsIGZvbnQs" +
-    "IG1heFdpZHRoOiAxMTAgfSk7CiAgICB5IC09IHJvd0g7CiAgfQogIHJldHVybiBhd2FpdCBwZGYuc2F2" +
-    "ZSgpOwp9"
-  ));
+async function loadOpen() {
+  openRows = []; dumpDate = "";
+  if (!dirHandle) return;
+  const entries = await listEntries();
+  const dump = await findDumpFile(entries);
+  if (!dump) return;
+  dumpDate = todayStrFrom(dump.lastModified);
+  try { openRows = parseDump(await dump.arrayBuffer()).filter((r) => r.status === "К устранению"); }
+  catch (_) { openRows = []; }
+  await loadComments();
+  await loadColNames();
+  await loadIntMap();
+  openRows.forEach(r => { if (intMap[String(r.act_no)]) r.integration = intMap[String(r.act_no)]; });
+  await updateSequences();
+}
+function todayStrFrom(ms) {
+  const d = new Date(ms);
+  return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
+}
 
-  const s = document.createElement("script");
-  s.textContent = src;
-  document.head.appendChild(s);
-})().catch((e) => {
-  console.error(e);
-  document.body.insertAdjacentHTML("afterbegin",
-    '<div style="padding:16px;background:#3a1820;color:#faa;font:14px sans-serif">Ошибка sborka v1.0: ' + e.message + "</div>");
+let colNames = { c1: "Комментарий", c2: "Примечание" };
+async function loadColNames() {
+  if (!dirHandle) return;
+  try {
+    const entries = await listEntries();
+    const f = await fileByName(entries, "названия_комментариев.json");
+    if (f) Object.assign(colNames, JSON.parse(await f.text()) || {});
+  } catch (_) {}
+}
+async function saveColNames() {
+  if (!dirHandle) return;
+  try {
+    const fh = await dirHandle.getFileHandle("названия_комментариев.json", { create: true });
+    const w = await fh.createWritable();
+    await w.write(new Blob([JSON.stringify(colNames)], { type: "application/json" }));
+    await w.close();
+  } catch (_) {}
+}
+function renderOpen() {
+  const host = $("open");
+  if (!host) return;
+  if (!dirHandle) { host.innerHTML = ""; return; }
+  if (!openRows.length) {
+    host.innerHTML = '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты</strong><span class="kicker">' +
+      (dumpDate ? "выгрузка от " + dumpDate : "нет выгрузки") + '</span></div><p class="kicker">Нет строк «К устранению».</p></section>';
+    return;
+  }
+  let rows = "";
+  openRows.forEach((r) => {
+    const raw = comments[String(r.act_no)];
+    const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+    rows += "<tr>" +
+      '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
+      '<td>' + esc(r.integration || "—") + "</td>" +
+      "<td>" + esc(r.pred_date || "—") + "</td>" +
+      "<td>" + esc(r.deadline || "—") + "</td>" +
+      '<td class="desc">' + esc(r.description || "—") + "</td>" +
+      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
+      '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
+      "</tr>";
+  });
+  host.innerHTML =
+    '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
+    '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
+    '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
+    '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '</tr></thead><tbody>' +
+    rows + "</tbody></table></section>";
+  host.querySelectorAll("[data-cmt]").forEach((el) => {
+    el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.dataset.field || "c1", el.value));
+  });
+  host.querySelectorAll(".colname").forEach((el) => {
+    el.addEventListener("change", () => {
+      colNames[el.dataset.col] = el.value;
+      saveColNames().catch(() => {});
+    });
+    el.addEventListener("blur", () => {
+      colNames[el.dataset.col] = el.value;
+      saveColNames().catch(() => {});
+    });
+  });
+  host.querySelectorAll("[data-go]").forEach((el) => {
+    el.addEventListener("click", () => {
+      $("num").value = el.dataset.go;
+      $("num").dispatchEvent(new Event("input"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  // sequences display
+  const seqHtml = '<section class="tape-wrap" style="margin-top:16px"><div class="open-head"><strong>Последовательности актов</strong></div>' +
+    '<p class="kicker">К устранению: ' + (sequences.open.join(", ") || "—") + '</p>' +
+    '<p class="kicker">Устранено: ' + (sequences.closed.join(", ") || "—") + '</p>' +
+    '<p class="kicker">новые: ' + (sequences.new.join(", ") || "—") + '</p>' +
+    '</section>';
+  host.insertAdjacentHTML("beforeend", seqHtml);
+
+}
+
+function render(d) {
+  if (!d.ok) {
+    ready = false; $("go").disabled = true; $("hint").textContent = "";
+    $("out").innerHTML = '<div class="msg bad">' + d.error + "</div>";
+    return;
+  }
+  ready = d.can_build;
+  $("go").disabled = !d.can_build;
+  $("hint").textContent = d.can_build ? "" : d.block;
+  const a = d.act;
+  $("out").innerHTML =
+    '<section class="tape-wrap"><div class="meta">' +
+    '<div><span class="k">Номер</span>' + a.act_no + "</div>" +
+    '<div><span class="k">Инт.номер</span>' + (a.integration || "—") + "</div>" +
+    '<div><span class="k">Статус</span>' + (a.status || "—") + "</div>" +
+    '<div><span class="k">Дата предписания</span>' + (a.pred_date || "—") + "</div>" +
+    '<div><span class="k">Срок</span>' + (a.deadline || "—") + "</div>" +
+    '<div><span class="k">Дата акта</span>' + d.act_date + "</div>" +
+    '<div><span class="k">Замечание</span>' + (a.description || "—") + "</div></div></section>" +
+    '<section class="tape-wrap"><div class="photos">' +
+    slotHtml(a.act_no, 1, "до", d.before, d.beforeUrl) +
+    slotHtml(a.act_no, 2, "после", d.after, d.afterUrl) +
+    "</div></section>";
+}
+
+function slotHtml(n, slot, label, name, url) {
+  const img = url
+    ? '<img src="' + url + '" alt="">'
+    : '<div class="ph">Добавить фото ' + label + '</div>';
+  const btn = url ? '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">Заменить</button>' : "";
+  return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img + btn +
+    '<figcaption class="kicker">' + label + " · " + (name || "нет " + n + "_" + slot) + "</figcaption></figure>";
+}
+async function toJpeg(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width; canvas.height = bmp.height;
+  canvas.getContext("2d").drawImage(bmp, 0, 0);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), w: bmp.width, h: bmp.height };
+}
+function drawingXml(rid, docId, name, cx, cy) {
+  return '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+    '<wp:extent cx="' + cx + '" cy="' + cy + '"/>' +
+    '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:docPr id="' + docId + '" name="' + name + '"/>' +
+    '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
+    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + docId + '" name="' + name + '"/><pic:cNvPicPr><a:picLocks noChangeAspect="1"/></pic:cNvPicPr></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+    '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+    "</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>";
+}
+function appXml() {
+  return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
+}
+function ensureRel(rels, rid, target) {
+  if (rels.includes('Id="' + rid + '"')) {
+    return rels.replace(new RegExp('<Relationship Id="' + rid + '"[^>]*/>'),
+      '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + target + '"/>');
+  }
+  return rels.replace("</Relationships>",
+    '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + target + '"/></Relationships>');
+}
+async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, beforeFile, afterFile }) {
+  const zip = await JSZip.loadAsync(templateBuf);
+  let xml = await zip.file("word/document.xml").async("string");
+  const useNo = (integration || "").trim() || String(actNo);
+  const map = {
+    "{{НОМЕР-АКТА}}": useNo,
+    "{{ДАТА-АКТА-ТЕКСТ}}": ruQuoted(actDate),
+    "{{ДАТА-ПРЕДПИСАНИЯ-ТЕКСТ}}": ruQuoted(predDate) + "г.",
+    "{{ОПИСАНИЕ}}": xmlEscape(description),
+    "{{СРОК-УСТРАНЕНИЯ}}": deadline,
+  };
+  for (const [a, b] of Object.entries(map)) xml = xml.split(a).join(b);
+  xml = xml.split("А.О. Татаринов").join("Р.Р. Рахматов");
+  const marker = xml.indexOf("> Приложение 1<") >= 0 ? xml.indexOf("> Приложение 1<") : xml.indexOf(">Приложение 1<");
+  if (marker > 0) {
+    let start = -1, from = marker;
+    while (from > 0) {
+      const i = xml.lastIndexOf("<w:p", from);
+      if (i < 0) break;
+      const next = xml[i + 4];
+      if (next === ">" || next === " ") { start = i; break; }
+      from = i - 1;
+    }
+    const end = xml.indexOf("</w:p>", marker);
+    if (start >= 0 && end > marker) xml = xml.slice(0, start) + xml.slice(end + "</w:p>".length);
+  }
+  if (!xml.includes("xmlns:a=")) {
+    xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
+  }
+  let photos = "";
+  let relsExtra = "";
+  if (beforeFile) {
+    const before = await toJpeg(beforeFile);
+    zip.file("word/media/image3.jpg", before.bytes);
+    photos += drawingXml("rId13", 20, "foto_do", CX, Math.round(CX * before.h / before.w));
+    relsExtra += "rId13 ";
+  }
+  if (afterFile) {
+    const after = await toJpeg(afterFile);
+    zip.file("word/media/image4.jpg", after.bytes);
+    photos += drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w));
+    relsExtra += "rId14 ";
+  }
+  if (photos) photos = appXml() + photos;
+  if (!xml.includes("<w:sectPr")) throw new Error("В шаблоне нет раздела страницы.");
+  xml = xml.replace("<w:sectPr", photos + "<w:sectPr");
+  zip.file("word/document.xml", xml);
+  let rels = await zip.file("word/_rels/document.xml.rels").async("string");
+  if (beforeFile) rels = ensureRel(rels, "rId13", "media/image3.jpg");
+  if (afterFile) rels = ensureRel(rels, "rId14", "media/image4.jpg");
+  zip.file("word/_rels/document.xml.rels", rels);
+  let ct = await zip.file("[Content_Types].xml").async("string");
+  if (!/Extension="jpe?g"/i.test(ct)) {
+    ct = ct.replace(/(<Types[^>]*>)/, '$1<Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="jpeg" ContentType="image/jpeg"/>');
+  }
+  zip.file("[Content_Types].xml", ct);
+  return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+function actName(n, integration) {
+  const use = (integration || "").trim() || String(n);
+  return "Акт об Устранении №" + use + ".docx";
+}
+async function saveAct(n) {
+  const info = await lookup(n);
+  if (!info.ok) throw new Error(info.error);
+  if (!info.can_build) throw new Error(info.block);
+  const entries = await listEntries();
+  const templateFile = await fileByName(entries, "shablon-akt.docx");
+  const templateBuf = templateFile ? await templateFile.arrayBuffer() : await embeddedTemplate();
+  const before = findPhotoEntry(entries, n, 1);
+  const after = findPhotoEntry(entries, n, 2);
+  const blob = await buildAct({
+    templateBuf,
+    actNo: n,
+    integration: info.act.integration,
+    actDate: info.act_date,
+    predDate: info.act.pred_date,
+    deadline: info.act.deadline,
+    description: info.act.description,
+    beforeFile: before ? await before.handle.getFile() : null,
+    afterFile: after ? await after.handle.getFile() : null,
+  });
+  const name = actName(n, info.act.integration);
+  const fh = await dirHandle.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+  return name;
+}
+async function pickFolder() {
+  dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+  $("folder").textContent = dirHandle.name;
+  $("num").disabled = false;
+  await refreshFiles();
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open("akt-tool", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(dirHandle, "dir");
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (_) {}
+}
+async function restoreFolder() {
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open("akt-tool", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const handle = await new Promise((resolve) => {
+      const tx = db.transaction("kv", "readonly");
+      const req = tx.objectStore("kv").get("dir");
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+    if (!handle) return;
+    const perm = await handle.queryPermission({ mode: "readwrite" });
+    if (perm !== "granted") return;
+    dirHandle = handle;
+    $("folder").textContent = dirHandle.name;
+    await refreshFiles();
+    await loadOpen();
+    await loadIntMap();
+    renderOpen();
+  } catch (_) {}
+}
+$("pick").addEventListener("click", () => pickFolder().catch((e) => {
+  $("out").innerHTML = '<div class="msg bad">' + (e.message || "Папку выбрать не удалось.") + "</div>";
+}));
+function expandNumbers(raw) {
+  const nos = [];
+  for (const part of (raw || "").trim().split(/\s+/)) {
+    if (!part) continue;
+    if (part.includes("-")) {
+      const [a, b] = part.split("-").map(x => parseInt(x, 10));
+      if (!isNaN(a) && !isNaN(b)) {
+        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) nos.push(i);
+      }
+    } else {
+      const n = parseInt(part, 10);
+      if (!isNaN(n)) nos.push(n);
+    }
+  }
+  return [...new Set(nos)];
+}
+$("num").addEventListener("input", () => {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const raw = $("num").value.trim();
+    const nos = expandNumbers(raw);
+    if (!nos.length || !dirHandle) { $("out").innerHTML = ""; $("go").disabled = true; $("pdfBtn").disabled = true; return; }
+    if (nos.length === 1) {
+      render(await lookup(nos[0]));
+      wireSlots();
+      $("pdfBtn").disabled = !$("go").disabled ? false : true;
+    } else {
+      $("out").innerHTML = '<div class="msg ok">Выбрано номеров: ' + nos.length + ' (' + nos.slice(0,10).join(", ") + (nos.length>10?"…":"") + ')</div>';
+      $("go").disabled = false;
+      $("pdfBtn").disabled = false;
+      ready = true;
+    }
+  }, 200);
+});
+$("go").addEventListener("click", async () => {
+  if (!ready) return;
+  $("go").disabled = true;
+  const nos = expandNumbers($("num").value);
+  $("hint").textContent = "Собираю " + nos.length + "…";
+  const done = [];
+  for (const n of nos) {
+    try {
+      const name = await saveAct(n);
+      done.push(name);
+    } catch (e) {
+      $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + n + ": " + e.message + "</div>");
+    }
+  }
+  $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Сохранено: ' + done.join(", ") + "</div>");
+  $("go").disabled = false;
+  $("hint").textContent = "";
+});
+if (typeof window.showDirectoryPicker !== "function") {
+  $("out").innerHTML = '<div class="msg bad">Нужен Chrome или Edge. В этом браузере папку выбрать нельзя.</div>';
+}
+
+
+let cyrFontBytes = null;
+async function getCyrFont() {
+  if (cyrFontBytes) return cyrFontBytes;
+  const res = await fetch("./data/ttr/LiberationSerif-Regular.ttf");
+  if (!res.ok) throw new Error("не удалось загрузить шрифт");
+  cyrFontBytes = new Uint8Array(await res.arrayBuffer());
+  return cyrFontBytes;
+}
+
+async function makeActPdf(n) {
+  const info = await lookup(n);
+  if (!info.ok || !info.can_build) throw new Error(info.block || info.error);
+  const { PDFDocument } = PDFLib;
+  const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(await getCyrFont(), { subset: false });
+  const W = 595, H = 842;
+  const midY = H / 2;
+  const topMargin = 36;
+  const photoMaxH = midY - topMargin - 28;
+  const photoMaxW = W - 50;
+  page.drawText("Акт об устранении № " + n, { x: 40, y: H - 32, size: 14, font });
+  const intn = info.act.integration || "";
+  if (intn) page.drawText("Инт. № " + intn, { x: 40, y: H - 48, size: 9, font });
+  const entries = await listEntries();
+  const before = findPhotoEntry(entries, n, 1);
+  const after = findPhotoEntry(entries, n, 2);
+  const slots = [];
+  if (before) slots.push({ e: before, label: "ДО" });
+  if (after) slots.push({ e: after, label: "ПОСЛЕ" });
+  if (slots.length) {
+    const gap = 10;
+    const slotW = (photoMaxW - (slots.length - 1) * gap) / slots.length;
+    const photoTop = H - 60;
+    for (let i = 0; i < slots.length; i++) {
+      try {
+        const file = await slots[i].e.handle.getFile();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let img;
+        try { img = await pdf.embedJpg(bytes); }
+        catch (_) { try { img = await pdf.embedPng(bytes); } catch (__) { continue; } }
+        const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
+        const dw = img.width * scale;
+        const dh = img.height * scale;
+        const x = 25 + i * (slotW + gap) + (slotW - dw) / 2;
+        const y = photoTop - dh;
+        if (y > midY - 10) {
+          page.drawImage(img, { x, y, width: dw, height: dh });
+          page.drawText(slots[i].label, { x: x + dw / 2 - 10, y: y - 11, size: 8, font });
+        }
+      } catch (err) { console.warn("photo", n, err); }
+    }
+  }
+  let y = midY - 24;
+  page.drawText("Устранённые замечания:", { x: 40, y, size: 11, font });
+  y -= 16;
+  let rest = (info.act.description || "—");
+  const maxChars = 90;
+  while (rest && y > 60) {
+    let line = rest.slice(0, maxChars);
+    if (rest.length > maxChars) {
+      const cut = line.lastIndexOf(" ");
+      if (cut > 40) line = line.slice(0, cut);
+    }
+    page.drawText(line, { x: 40, y, size: 10, font, maxWidth: 515 });
+    rest = rest.slice(line.length).trimStart();
+    y -= 14;
+  }
+  y -= 8;
+  page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 9, font });
+  y -= 14;
+  const raw = comments[String(n)];
+  const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+  const c1n = (colNames && colNames.c1) || "Комментарий";
+  const c2n = (colNames && colNames.c2) || "Примечание";
+  if (cc.c1 || cc.c2) {
+    page.drawText(c1n + ": " + (cc.c1 || "—") + "    " + c2n + ": " + (cc.c2 || "—"), { x: 40, y, size: 9, font, maxWidth: 515 });
+  }
+  return await pdf.save();
+}
+
+async function makeCoverPdf(nos) {
+  const { PDFDocument } = PDFLib;
+  const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(await getCyrFont(), { subset: false });
+  const bold = font;
+  page.drawText("Обложка актов об устранении", { x: 30, y: 810, size: 13, font: bold });
+  page.drawText("Незакрытых (к устранению): " + nos.length, { x: 30, y: 792, size: 10, font });
+  let y = 770;
+  const c1n = (colNames && colNames.c1) || "Комментарий";
+  const c2n = (colNames && colNames.c2) || "Примечание";
+  page.drawText("№", { x: 30, y, size: 8, font: bold });
+  page.drawText("Инт. №", { x: 60, y, size: 8, font: bold });
+  page.drawText("Описание", { x: 115, y, size: 8, font: bold });
+  page.drawText(c1n.slice(0, 12), { x: 340, y, size: 8, font: bold });
+  page.drawText(c2n.slice(0, 12), { x: 455, y, size: 8, font: bold });
+  y -= 4;
+  page.drawLine({ start: { x: 30, y }, end: { x: 565, y }, thickness: 0.5 });
+  y -= 11;
+  const rowH = Math.max(9, Math.min(14, (y - 28) / Math.max(nos.length, 1)));
+  for (const n of nos) {
+    if (y < 28) break;
+    const info = await lookup(n);
+    const intn = info.ok ? (info.act.integration || "—") : "—";
+    const desc = info.ok ? (info.act.description || "").slice(0, 42) : "";
+    const raw = comments[String(n)];
+    const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+    page.drawText(String(n), { x: 30, y, size: 7, font });
+    page.drawText(String(intn), { x: 60, y, size: 7, font });
+    page.drawText(desc, { x: 115, y, size: 7, font, maxWidth: 215 });
+    page.drawText((cc.c1 || "").slice(0, 22), { x: 340, y, size: 7, font, maxWidth: 110 });
+    page.drawText((cc.c2 || "").slice(0, 22), { x: 455, y, size: 7, font, maxWidth: 110 });
+    y -= rowH;
+  }
+  return await pdf.save();
+}
+
+async function downloadPdf(bytes, name) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$("pdfBtn").addEventListener("click", async () => {
+  const nos = expandNumbers($("num").value);
+  if (!nos.length) return;
+  $("hint").textContent = "Делаю PDF…";
+  try {
+    if (nos.length === 1) {
+      const bytes = await makeActPdf(nos[0]);
+      await downloadPdf(bytes, "Акт_" + nos[0] + ".pdf");
+    } else {
+      const { PDFDocument } = PDFLib;
+      const merged = await PDFDocument.create();
+      for (const n of nos) {
+        try {
+          const bytes = await makeActPdf(n);
+          const src = await PDFDocument.load(bytes);
+          const [p] = await merged.copyPages(src, [0]);
+          merged.addPage(p);
+        } catch (_) {}
+      }
+      await downloadPdf(await merged.save(), "акты.pdf");
+    }
+    $("hint").textContent = "PDF готов";
+  } catch (e) {
+    $("hint").textContent = "";
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + e.message + "</div>");
+  }
+});
+
+$("coverBtn").addEventListener("click", async () => {
+  let nos = expandNumbers($("num").value);
+  if (!nos.length) nos = openRows.map(r => r.act_no);
+  if (!nos.length) { alert("Нет номеров"); return; }
+  $("hint").textContent = "Делаю обложку…";
+  try {
+    const bytes = await makeCoverPdf(nos);
+    await downloadPdf(bytes, "обложка.pdf");
+    $("hint").textContent = "Обложка готова";
+  } catch (e) {
+    $("hint").textContent = "";
+    alert(e.message);
+  }
+});
+
+$("journalBtn").addEventListener("click", async () => {
+  const nos = openRows.map(r => r.act_no);
+  if (!nos.length) { alert("Нет незакрытых актов"); return; }
+  $("hint").textContent = "Собираю журнал…";
+  try {
+    const { PDFDocument } = PDFLib;
+    const journal = await PDFDocument.create();
+    journal.registerFontkit(fontkit);
+    const fontBytes = await getCyrFont();
+    const font = await journal.embedFont(fontBytes, { subset: false });
+    // cover page
+    const coverPage = journal.addPage([595, 842]);
+    coverPage.drawText("Обложка актов об устранении", { x: 30, y: 810, size: 13, font });
+    coverPage.drawText("Незакрытых (к устранению): " + nos.length, { x: 30, y: 792, size: 10, font });
+    let cy = 770;
+    const c1n = (colNames && colNames.c1) || "Комментарий";
+    const c2n = (colNames && colNames.c2) || "Примечание";
+    coverPage.drawText("№", { x: 30, y: cy, size: 8, font });
+    coverPage.drawText("Инт. №", { x: 60, y: cy, size: 8, font });
+    coverPage.drawText("Описание", { x: 115, y: cy, size: 8, font });
+    coverPage.drawText(c1n.slice(0, 12), { x: 340, y: cy, size: 8, font });
+    coverPage.drawText(c2n.slice(0, 12), { x: 455, y: cy, size: 8, font });
+    cy -= 4;
+    coverPage.drawLine({ start: { x: 30, y: cy }, end: { x: 565, y: cy }, thickness: 0.5 });
+    cy -= 11;
+    const rowH = Math.max(9, Math.min(14, (cy - 28) / Math.max(nos.length, 1)));
+    for (const n of nos) {
+      if (cy < 28) break;
+      const info = await lookup(n);
+      const intn = info.ok ? (info.act.integration || "—") : "—";
+      const desc = info.ok ? (info.act.description || "").slice(0, 42) : "";
+      const raw = comments[String(n)];
+      const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+      coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
+      coverPage.drawText(String(intn), { x: 60, y: cy, size: 7, font });
+      coverPage.drawText(desc, { x: 115, y: cy, size: 7, font, maxWidth: 215 });
+      coverPage.drawText((cc.c1 || "").slice(0, 22), { x: 340, y: cy, size: 7, font, maxWidth: 110 });
+      coverPage.drawText((cc.c2 || "").slice(0, 22), { x: 455, y: cy, size: 7, font, maxWidth: 110 });
+      cy -= rowH;
+    }
+    // act pages
+    for (const n of nos) {
+      try {
+        const info = await lookup(n);
+        if (!info.ok || !info.can_build) continue;
+        const page = journal.addPage([595, 842]);
+        const W = 595, H = 842;
+        const midY = H / 2;
+        page.drawText("Акт об устранении № " + n, { x: 40, y: H - 32, size: 14, font });
+        const intn = info.act.integration || "";
+        if (intn) page.drawText("Инт. № " + intn, { x: 40, y: H - 48, size: 9, font });
+        const entries = await listEntries();
+        const before = findPhotoEntry(entries, n, 1);
+        const after = findPhotoEntry(entries, n, 2);
+        const slots = [];
+        if (before) slots.push({ e: before, label: "ДО" });
+        if (after) slots.push({ e: after, label: "ПОСЛЕ" });
+        if (slots.length) {
+          const gap = 10;
+          const slotW = (W - 50 - (slots.length - 1) * gap) / slots.length;
+          const photoMaxH = midY - 70;
+          const photoTop = H - 60;
+          for (let i = 0; i < slots.length; i++) {
+            try {
+              const file = await slots[i].e.handle.getFile();
+              const bytes = new Uint8Array(await file.arrayBuffer());
+              let img;
+              try { img = await journal.embedJpg(bytes); }
+              catch (_) { try { img = await journal.embedPng(bytes); } catch (__) { continue; } }
+              const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
+              const dw = img.width * scale, dh = img.height * scale;
+              const x = 25 + i * (slotW + gap) + (slotW - dw) / 2;
+              const y = photoTop - dh;
+              if (y > midY - 10) {
+                page.drawImage(img, { x, y, width: dw, height: dh });
+                page.drawText(slots[i].label, { x: x + dw / 2 - 10, y: y - 11, size: 8, font });
+              }
+            } catch (err) { console.warn("jphoto", n, err); }
+          }
+        }
+        let y = midY - 20;
+        page.drawText("Устранённые замечания:", { x: 40, y, size: 11, font });
+        y -= 16;
+        let rest = (info.act.description || "—");
+        const maxChars = 90;
+        while (rest && y > 50) {
+          let line = rest.slice(0, maxChars);
+          if (rest.length > maxChars) {
+            const cut = line.lastIndexOf(" ");
+            if (cut > 40) line = line.slice(0, cut);
+          }
+          page.drawText(line, { x: 40, y, size: 10, font, maxWidth: 515 });
+          rest = rest.slice(line.length).trimStart();
+          y -= 14;
+        }
+        y -= 8;
+        page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 9, font });
+      } catch (err) { console.warn("jact", n, err); }
+    }
+    await downloadPdf(await journal.save(), "журнал.pdf");
+    $("hint").textContent = "Журнал готов";
+  } catch (e) {
+    $("hint").textContent = "";
+    alert(e.message);
+  }
+});
+
+restoreFolder().then(() => loadOpen().then(renderOpen));
+
+function wireSlots() {
+  document.querySelectorAll("[data-pick]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const [n, slot] = el.dataset.pick.split(":");
+      const inp = $("photoIn");
+      inp.dataset.n = n;
+      inp.dataset.slot = slot;
+      inp.value = "";
+      inp.click();
+    });
+  });
+}
+$("photoIn").addEventListener("change", async () => {
+  const file = $("photoIn").files && $("photoIn").files[0];
+  if (!file) return;
+  const n = Number($("photoIn").dataset.n);
+  const slot = Number($("photoIn").dataset.slot);
+  $("hint").textContent = "Сохраняю фото…";
+  try {
+    await savePhoto(n, slot, file);
+    render(await lookup(n));
+    wireSlots();
+    $("hint").textContent = "Фото сохранено: " + n + "_" + slot + ".jpg";
+  } catch (e) {
+    $("hint").textContent = "";
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + (e.message || "Не удалось сохранить фото.") + "</div>");
+  }
 });
