@@ -1,4 +1,4 @@
-/* v1.8 */
+/* v1.9 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -357,7 +357,7 @@ async function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 4px 0 0">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
+    '<table class="table"><thead><tr><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
     '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '</tr></thead><tbody>' +
@@ -422,12 +422,11 @@ function render(d) {
 
 function slotHtml(n, slot, label, name, url) {
   const img = url
-    ? '<img src="' + url + '" alt="">'
+    ? '<img src="' + url + '" alt="" data-full="' + url + '" data-pick="' + n + ':' + slot + '" style="cursor:pointer">'
     : '<div class="ph">Добавить фото ' + label + '</div>';
-  const fullBtn = url ? '<button type="button" class="full" data-full="' + url + '" data-pick="' + n + ':' + slot + '">На весь экран</button>' : "";
   const chgBtn = '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">' + (url ? "Заменить" : "Добавить") + '</button>';
-  return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img +
-    '<div class="btns">' + fullBtn + chgBtn + '</div>' +
+  return '<figure class="slot">' + img +
+    '<div class="btns">' + chgBtn + '</div>' +
     '<figcaption class="kicker">' + label + " · " + (name || "нет " + n + "_" + slot) + "</figcaption></figure>";
 }
 async function toJpeg(file) {
@@ -710,34 +709,42 @@ async function makeActPdf(n) {
       } catch (err) { console.warn("photo", n, err); }
     }
   }
-  let y = midY - 16;
-  page.drawText("Описание:", { x: 40, y, size: 11, font });
+  let y = midY - 8;
+  // dates first
+  page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
+  y -= 16;
+  // act number + description header
+  page.drawText("Акт № " + n + "  Описание:", { x: 40, y, size: 11, font });
   y -= 14;
+  // description with newline handling, fills to bottom
   let rest = (info.act.description || "—");
   const maxChars = 85;
-  const bottomLimit = 70;
-  while (rest && y > bottomLimit) {
-    let line = rest.slice(0, maxChars);
-    if (rest.length > maxChars) {
-      const cut = line.lastIndexOf(" ");
-      if (cut > 30) line = line.slice(0, cut);
+  const bottomLimit = 40;
+  const paragraphs = rest.split(/\n/);
+  for (const para of paragraphs) {
+    let p = para;
+    while (p && y > bottomLimit) {
+      let line = p.slice(0, maxChars);
+      if (p.length > maxChars) {
+        const cut = line.lastIndexOf(" ");
+        if (cut > 30) line = line.slice(0, cut);
+      }
+      page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
+      p = p.slice(line.length).trimStart();
+      y -= 12;
     }
-    page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
-    rest = rest.slice(line.length).trimStart();
-    y -= 12;
-  }
-  if (rest && y > bottomLimit) {
-    page.drawText(rest.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
-    y -= 12;
+    if (p && y > bottomLimit) {
+      page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
+      y -= 12;
+    }
+    y -= 4; // gap between paragraphs
   }
   y -= 6;
-  if (y > 40) page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
-  y -= 14;
   const raw = comments[String(n)];
   const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
   const c1n = (colNames && colNames.c1) || "Комментарий";
   const c2n = (colNames && colNames.c2) || "Примечание";
-  if (cc.c1 || cc.c2) {
+  if ((cc.c1 || cc.c2) && y > 30) {
     page.drawText(c1n + ": " + (cc.c1 || "—") + "    " + c2n + ": " + (cc.c2 || "—"), { x: 40, y, size: 9, font, maxWidth: 515 });
   }
   return await pdf.save();
@@ -758,7 +765,7 @@ async function makeCoverPdf(nos) {
   page.drawText("№", { x: 30, y, size: 8, font: bold });
   page.drawText("Инт. №", { x: 55, y, size: 8, font: bold });
   page.drawText("Описание", { x: 90, y, size: 8, font: bold });
-  page.drawText("Фото", { x: 320, y, size: 8, font: bold });
+  page.drawText("Фото", { x: 330, y, size: 8, font: bold });
   page.drawText(c1n.slice(0, 10), { x: 370, y, size: 8, font: bold });
   page.drawText(c2n.slice(0, 10), { x: 480, y, size: 8, font: bold });
   y -= 4;
@@ -771,7 +778,7 @@ async function makeCoverPdf(nos) {
     if (y < 28) break;
     const info = await lookup(n);
     const intn = info.ok ? (info.act.integration || "—") : "—";
-    const descFull = info.ok ? (info.act.description || "") : "";
+    const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
     const descMax = 48;
     let desc1 = descFull.slice(0, descMax);
     let desc2 = "";
@@ -780,12 +787,12 @@ async function makeCoverPdf(nos) {
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
     page.drawText(String(n), { x: 30, y, size: 7, font });
     page.drawText(String(intn), { x: 55, y, size: 7, font });
-    page.drawText(desc1, { x: 90, y, size: 7, font, maxWidth: 220 });
-    if (desc2) page.drawText(desc2, { x: 90, y: y - 8, size: 7, font, maxWidth: 220 });
+    page.drawText(desc1, { x: 90, y, size: 7, font, maxWidth: 230 });
+    if (desc2) page.drawText(desc2, { x: 90, y: y - 8, size: 7, font, maxWidth: 230 });
     // mini photos
     const before = findPhotoEntry(entries, n, 1);
     const after = findPhotoEntry(entries, n, 2);
-    let px = 320;
+    let px = 330;
     for (const e of [before, after]) {
       if (e) {
         try {
@@ -807,7 +814,7 @@ async function makeCoverPdf(nos) {
     page.drawText((cc.c1 || "").slice(0, 16), { x: 370, y, size: 7, font, maxWidth: 100 });
     page.drawText((cc.c2 || "").slice(0, 16), { x: 480, y, size: 7, font, maxWidth: 80 });
     y -= rowH;
-    if (y > 28) page.drawLine({ start: { x: 30, y: y + 4 }, end: { x: 565, y: y + 4 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
+    if (y > 28) page.drawLine({ start: { x: 30, y: y + 14 }, end: { x: 565, y: y + 14 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
   }
   return await pdf.save();
 }
@@ -884,7 +891,7 @@ $("journalBtn").addEventListener("click", async () => {
     coverPage.drawText("№", { x: 30, y: cy, size: 8, font });
     coverPage.drawText("Инт. №", { x: 55, y: cy, size: 8, font });
     coverPage.drawText("Описание", { x: 90, y: cy, size: 8, font });
-    coverPage.drawText("Фото", { x: 320, y: cy, size: 8, font });
+    coverPage.drawText("Фото", { x: 330, y: cy, size: 8, font });
     coverPage.drawText(c1n.slice(0, 10), { x: 370, y: cy, size: 8, font });
     coverPage.drawText(c2n.slice(0, 10), { x: 480, y: cy, size: 8, font });
     cy -= 4;
@@ -897,7 +904,7 @@ $("journalBtn").addEventListener("click", async () => {
       if (cy < 28) break;
       const info = await lookup(n);
       const intn = info.ok ? (info.act.integration || "—") : "—";
-      const descFull = info.ok ? (info.act.description || "") : "";
+      const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
     const descMax = 48;
     let desc1 = descFull.slice(0, descMax);
     let desc2 = "";
@@ -906,11 +913,11 @@ $("journalBtn").addEventListener("click", async () => {
       const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
       coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
       coverPage.drawText(String(intn), { x: 55, y: cy, size: 7, font });
-      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 220 });
-      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 220 });
+      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 230 });
+      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 230 });
       const before = findPhotoEntry(entries, n, 1);
       const after = findPhotoEntry(entries, n, 2);
-      let px = 320;
+      let px = 330;
       for (const e of [before, after]) {
         if (e) {
           try {
@@ -932,7 +939,7 @@ $("journalBtn").addEventListener("click", async () => {
       coverPage.drawText((cc.c1 || "").slice(0, 16), { x: 370, y: cy, size: 7, font, maxWidth: 100 });
       coverPage.drawText((cc.c2 || "").slice(0, 16), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
       cy -= rowH;
-      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 4 }, end: { x: 565, y: cy + 4 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
+      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 14 }, end: { x: 565, y: cy + 14 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
     }
     // act pages
     for (const n of nos) {
@@ -974,23 +981,33 @@ $("journalBtn").addEventListener("click", async () => {
             } catch (err) { console.warn("jphoto", n, err); }
           }
         }
-        let y = midY - 20;
-        page.drawText("Описание:", { x: 40, y, size: 11, font });
+        let y = midY - 8;
+        page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
         y -= 16;
+        page.drawText("Акт № " + n + "  Описание:", { x: 40, y, size: 11, font });
+        y -= 14;
         let rest = (info.act.description || "—");
-        const maxChars = 90;
-        while (rest && y > 50) {
-          let line = rest.slice(0, maxChars);
-          if (rest.length > maxChars) {
-            const cut = line.lastIndexOf(" ");
-            if (cut > 40) line = line.slice(0, cut);
+        const maxChars = 85;
+        const bottomLimit = 40;
+        const paragraphs = rest.split(/\n/);
+        for (const para of paragraphs) {
+          let p = para;
+          while (p && y > bottomLimit) {
+            let line = p.slice(0, maxChars);
+            if (p.length > maxChars) {
+              const cut = line.lastIndexOf(" ");
+              if (cut > 30) line = line.slice(0, cut);
+            }
+            page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
+            p = p.slice(line.length).trimStart();
+            y -= 12;
           }
-          page.drawText(line, { x: 40, y, size: 10, font, maxWidth: 515 });
-          rest = rest.slice(line.length).trimStart();
-          y -= 14;
+          if (p && y > bottomLimit) {
+            page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
+            y -= 12;
+          }
+          y -= 4;
         }
-        y -= 8;
-        page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 9, font });
       } catch (err) { console.warn("jact", n, err); }
     }
     await downloadPdf(await journal.save(), "журнал.pdf");
