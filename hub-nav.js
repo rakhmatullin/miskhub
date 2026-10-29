@@ -90,3 +90,12 @@
     setTimeout(function () { obs.disconnect(); }, 20000);
   }
 })();
+
+(function() {
+  var header = document.querySelector("header.top, header");
+  if (!header) return;
+  var ver = document.createElement("span");
+  ver.textContent = "версия 2.0";
+  ver.style.cssText = "margin-left:auto;font-size:12px;opacity:0.7;color:#8ea0c0";
+  header.appendChild(ver);
+})();
