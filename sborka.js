@@ -1,4 +1,4 @@
-/* v1.7 */
+/* v1.8 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -151,6 +151,7 @@ async function lookup(n) {
 const COMMENTS_FILE = "комментарии.json";
 let comments = {};
 let openRows = [];
+let sortDesc = true;
 let dumpDate = "";
 
 async function loadComments() {
@@ -328,8 +329,9 @@ async function renderOpen() {
       (dumpDate ? "выгрузка от " + dumpDate : "нет выгрузки") + '</span></div><p class="kicker">Нет строк «К устранению».</p></section>';
     return;
   }
+  const sorted = [...openRows].sort((a, b) => sortDesc ? b.act_no - a.act_no : a.act_no - b.act_no);
   let rows = "";
-  for (const r of openRows) {
+  for (const r of sorted) {
     const raw = comments[String(r.act_no)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
     const entries = await listEntries();
@@ -355,7 +357,7 @@ async function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
+    '<table class="table"><thead><tr><th><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 4px 0 0">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
     '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '</tr></thead><tbody>' +
@@ -389,6 +391,8 @@ async function renderOpen() {
     '</section>';
   host.insertAdjacentHTML("beforeend", seqHtml);
   wireSlots();
+  const sortBtn = host.querySelector("#sortBtn");
+  if (sortBtn) sortBtn.addEventListener("click", () => { sortDesc = !sortDesc; renderOpen(); });
 }
 
 function render(d) {
@@ -753,30 +757,35 @@ async function makeCoverPdf(nos) {
   const c2n = (colNames && colNames.c2) || "Примечание";
   page.drawText("№", { x: 30, y, size: 8, font: bold });
   page.drawText("Инт. №", { x: 55, y, size: 8, font: bold });
-  page.drawText("Описание", { x: 100, y, size: 8, font: bold });
-  page.drawText("Фото", { x: 280, y, size: 8, font: bold });
-  page.drawText(c1n.slice(0, 10), { x: 360, y, size: 8, font: bold });
+  page.drawText("Описание", { x: 90, y, size: 8, font: bold });
+  page.drawText("Фото", { x: 320, y, size: 8, font: bold });
+  page.drawText(c1n.slice(0, 10), { x: 370, y, size: 8, font: bold });
   page.drawText(c2n.slice(0, 10), { x: 480, y, size: 8, font: bold });
   y -= 4;
   page.drawLine({ start: { x: 30, y }, end: { x: 565, y }, thickness: 0.5 });
   y -= 11;
-  const rowH = Math.max(10, Math.min(14, (y - 28) / Math.max(nos.length, 1)));
-  const thumbH = Math.min(rowH - 2, 12);
+  const rowH = Math.max(16, Math.min(22, (y - 28) / Math.max(nos.length, 1)));
+  const thumbH = Math.min(rowH - 4, 14);
   const entries = await listEntries();
   for (const n of nos) {
     if (y < 28) break;
     const info = await lookup(n);
     const intn = info.ok ? (info.act.integration || "—") : "—";
-    const desc = info.ok ? (info.act.description || "").slice(0, 36) : "";
+    const descFull = info.ok ? (info.act.description || "") : "";
+    const descMax = 48;
+    let desc1 = descFull.slice(0, descMax);
+    let desc2 = "";
+    if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
     const raw = comments[String(n)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
     page.drawText(String(n), { x: 30, y, size: 7, font });
     page.drawText(String(intn), { x: 55, y, size: 7, font });
-    page.drawText(desc, { x: 100, y, size: 7, font, maxWidth: 170 });
+    page.drawText(desc1, { x: 90, y, size: 7, font, maxWidth: 220 });
+    if (desc2) page.drawText(desc2, { x: 90, y: y - 8, size: 7, font, maxWidth: 220 });
     // mini photos
     const before = findPhotoEntry(entries, n, 1);
     const after = findPhotoEntry(entries, n, 2);
-    let px = 280;
+    let px = 320;
     for (const e of [before, after]) {
       if (e) {
         try {
@@ -793,11 +802,12 @@ async function makeCoverPdf(nos) {
           }
         } catch (_) {}
       }
-      px += 18;
+      px += 16;
     }
-    page.drawText((cc.c1 || "").slice(0, 18), { x: 360, y, size: 7, font, maxWidth: 110 });
-    page.drawText((cc.c2 || "").slice(0, 18), { x: 480, y, size: 7, font, maxWidth: 80 });
+    page.drawText((cc.c1 || "").slice(0, 16), { x: 370, y, size: 7, font, maxWidth: 100 });
+    page.drawText((cc.c2 || "").slice(0, 16), { x: 480, y, size: 7, font, maxWidth: 80 });
     y -= rowH;
+    if (y > 28) page.drawLine({ start: { x: 30, y: y + 4 }, end: { x: 565, y: y + 4 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
   }
   return await pdf.save();
 }
@@ -873,29 +883,34 @@ $("journalBtn").addEventListener("click", async () => {
     const c2n = (colNames && colNames.c2) || "Примечание";
     coverPage.drawText("№", { x: 30, y: cy, size: 8, font });
     coverPage.drawText("Инт. №", { x: 55, y: cy, size: 8, font });
-    coverPage.drawText("Описание", { x: 100, y: cy, size: 8, font });
-    coverPage.drawText("Фото", { x: 280, y: cy, size: 8, font });
-    coverPage.drawText(c1n.slice(0, 10), { x: 360, y: cy, size: 8, font });
+    coverPage.drawText("Описание", { x: 90, y: cy, size: 8, font });
+    coverPage.drawText("Фото", { x: 320, y: cy, size: 8, font });
+    coverPage.drawText(c1n.slice(0, 10), { x: 370, y: cy, size: 8, font });
     coverPage.drawText(c2n.slice(0, 10), { x: 480, y: cy, size: 8, font });
     cy -= 4;
     coverPage.drawLine({ start: { x: 30, y: cy }, end: { x: 565, y: cy }, thickness: 0.5 });
     cy -= 11;
-    const rowH = Math.max(10, Math.min(14, (cy - 28) / Math.max(nos.length, 1)));
-    const thumbH = Math.min(rowH - 2, 12);
+    const rowH = Math.max(16, Math.min(22, (cy - 28) / Math.max(nos.length, 1)));
+    const thumbH = Math.min(rowH - 4, 14);
     const entries = await listEntries();
     for (const n of nos) {
       if (cy < 28) break;
       const info = await lookup(n);
       const intn = info.ok ? (info.act.integration || "—") : "—";
-      const desc = info.ok ? (info.act.description || "").slice(0, 36) : "";
+      const descFull = info.ok ? (info.act.description || "") : "";
+    const descMax = 48;
+    let desc1 = descFull.slice(0, descMax);
+    let desc2 = "";
+    if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
       const raw = comments[String(n)];
       const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
       coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
       coverPage.drawText(String(intn), { x: 55, y: cy, size: 7, font });
-      coverPage.drawText(desc, { x: 100, y: cy, size: 7, font, maxWidth: 170 });
+      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 220 });
+      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 220 });
       const before = findPhotoEntry(entries, n, 1);
       const after = findPhotoEntry(entries, n, 2);
-      let px = 280;
+      let px = 320;
       for (const e of [before, after]) {
         if (e) {
           try {
@@ -912,11 +927,12 @@ $("journalBtn").addEventListener("click", async () => {
             }
           } catch (_) {}
         }
-        px += 18;
+        px += 16;
       }
-      coverPage.drawText((cc.c1 || "").slice(0, 18), { x: 360, y: cy, size: 7, font, maxWidth: 110 });
-      coverPage.drawText((cc.c2 || "").slice(0, 18), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
+      coverPage.drawText((cc.c1 || "").slice(0, 16), { x: 370, y: cy, size: 7, font, maxWidth: 100 });
+      coverPage.drawText((cc.c2 || "").slice(0, 16), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
       cy -= rowH;
+      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 4 }, end: { x: 565, y: cy + 4 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
     }
     // act pages
     for (const n of nos) {
