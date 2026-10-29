@@ -5,12 +5,16 @@
     a.dataset.branded = "1";
     a.style.display = "inline-flex";
     a.style.alignItems = "center";
-    a.style.gap = "8px";
-    a.style.letterSpacing = "0.32em";
-    a.style.textTransform = "uppercase";
-    a.style.fontWeight = "500";
-    a.style.fontSize = "13px";
+    a.style.gap = "0";
+    a.style.letterSpacing = "-0.02em";
+    a.style.textTransform = "none";
+    a.style.fontWeight = "600";
+    a.style.fontSize = "1.05rem";
     a.style.textDecoration = "none";
+    a.style.background = "linear-gradient(135deg, #7dd3fc, #38bdf8)";
+    a.style.webkitBackgroundClip = "text";
+    a.style.webkitTextFillColor = "transparent";
+    a.style.backgroundClip = "text";
     var img = a.querySelector("img");
     if (!img) {
       img = document.createElement("img");
@@ -22,7 +26,7 @@
     img.height = 15;
     img.style.width = "15px";
     img.style.height = "15px";
-    img.style.display = "block";
+    img.style.display = "none";
     if (!a.querySelector("span")) {
       var text = "";
       a.childNodes.forEach(function (n) {
@@ -73,7 +77,7 @@
       return path.indexOf("/" + file) !== -1;
     }
     var isIndex = /\/index\.html$|\/$/.test(location.pathname);
-    var items = isIndex ? [["index.html", "Граф"], ["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Акт ТТР"]] : [];
+    var items = isIndex ? [["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Акт ТТР"]] : [];
     nav.innerHTML = items.map(function (it) {
       return '<a href="./' + it[0] + '"' + (on(it[0]) ? ' class="on"' : "") + ">" + it[1] + "</a>";
     }).join("");
