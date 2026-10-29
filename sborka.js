@@ -1,4 +1,4 @@
-/* v2.6 */
+/* v2.7 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -546,17 +546,11 @@ async function saveAct(n) {
     afterFile: after ? await after.handle.getFile() : null,
   });
   const name = actName(n, info.act.integration);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  setTimeout(() => {
-    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-  }, 0);
+  if (!dirHandle) throw new Error("Сначала выбери папку");
+  const fh = await dirHandle.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
   return name;
 }
 async function pickFolder() {
