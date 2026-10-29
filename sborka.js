@@ -1,4 +1,4 @@
-/* v1.4 */
+/* v1.5 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -319,7 +319,7 @@ async function saveColNames() {
     await w.close();
   } catch (_) {}
 }
-function renderOpen() {
+async function renderOpen() {
   const host = $("open");
   if (!host) return;
   if (!dirHandle) { host.innerHTML = ""; return; }
@@ -329,19 +329,29 @@ function renderOpen() {
     return;
   }
   let rows = "";
-  openRows.forEach((r) => {
+  for (const r of openRows) {
     const raw = comments[String(r.act_no)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+    const entries = await listEntries();
+    const before = findPhotoEntry(entries, r.act_no, 1);
+    const after = findPhotoEntry(entries, r.act_no, 2);
+    const beforeUrl = before ? URL.createObjectURL(await before.handle.getFile()) : "";
+    const afterUrl = after ? URL.createObjectURL(await after.handle.getFile()) : "";
+    const mini = '<div class="mini-photos">' +
+      (beforeUrl ? '<img src="' + beforeUrl + '" data-full="' + beforeUrl + '" data-pick="' + r.act_no + ':1" title="ДО">' : '<div class="ph" data-pick="' + r.act_no + ':1">+</div>') +
+      (afterUrl ? '<img src="' + afterUrl + '" data-full="' + afterUrl + '" data-pick="' + r.act_no + ':2" title="ПОСЛЕ">' : '<div class="ph" data-pick="' + r.act_no + ':2">+</div>') +
+      '</div>';
     rows += "<tr>" +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
       '<td>' + esc(r.integration || "—") + "</td>" +
       "<td>" + esc(r.pred_date || "—") + "</td>" +
       "<td>" + esc(r.deadline || "—") + "</td>" +
       '<td class="desc">' + esc(r.description || "—") + "</td>" +
+      '<td>' + mini + '</td>' +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
       "</tr>";
-  });
+  }
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
@@ -410,7 +420,7 @@ function slotHtml(n, slot, label, name, url) {
   const img = url
     ? '<img src="' + url + '" alt="">'
     : '<div class="ph">Добавить фото ' + label + '</div>';
-  const fullBtn = url ? '<button type="button" class="full" data-full="' + url + '">На весь экран</button>' : "";
+  const fullBtn = url ? '<button type="button" class="full" data-full="' + url + '" data-pick="' + n + ':' + slot + '">На весь экран</button>' : "";
   const chgBtn = '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">' + (url ? "Заменить" : "Добавить") + '</button>';
   return '<figure class="slot" data-pick="' + n + ':' + slot + '">' + img +
     '<div class="btns">' + fullBtn + chgBtn + '</div>' +
@@ -530,10 +540,11 @@ async function saveAct(n) {
     afterFile: after ? await after.handle.getFile() : null,
   });
   const name = actName(n, info.act.integration);
-  const fh = await dirHandle.getFileHandle(name, { create: true });
-  const w = await fh.createWritable();
-  await w.write(blob);
-  await w.close();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   return name;
 }
 async function pickFolder() {
@@ -962,10 +973,19 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   e.stopPropagation();
   const url = btn.dataset.full;
+  const pick = btn.dataset.pick || "";
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center";
-  overlay.innerHTML = '<img src="' + url + '" style="max-width:96%;max-height:96%;object-fit:contain"><button style="position:absolute;top:12px;right:12px;background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Закрыть</button>';
-  overlay.querySelector("button").onclick = () => overlay.remove();
+  overlay.innerHTML = '<img src="' + url + '" style="max-width:96%;max-height:96%;object-fit:contain"><div style="position:absolute;top:12px;right:12px;display:flex;gap:6px"><button id="fs-replace" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Заменить</button><button id="fs-close" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Закрыть</button></div>';
+  overlay.querySelector("#fs-close").onclick = () => overlay.remove();
+  overlay.querySelector("#fs-replace").onclick = () => {
+    overlay.remove();
+    if (pick) {
+      const inp = $("photoIn");
+      inp.dataset.pick = pick;
+      inp.click();
+    }
+  };
   overlay.onclick = (ev) => { if (ev.target === overlay) overlay.remove(); };
   document.body.appendChild(overlay);
 });
