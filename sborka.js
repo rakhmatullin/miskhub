@@ -1,4 +1,4 @@
-/* v2.3 */
+/* v2.4 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -503,7 +503,7 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
     photos += drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w));
     relsExtra += "rId14 ";
   }
-  if (photos) photos = appXml() + photos;
+  if (photos) photos = photos;
   if (!xml.includes("<w:sectPr")) throw new Error("В шаблоне нет раздела страницы.");
   xml = xml.replace("<w:sectPr", photos + "<w:sectPr");
   zip.file("word/document.xml", xml);
@@ -543,13 +543,17 @@ async function saveAct(n) {
     afterFile: after ? await after.handle.getFile() : null,
   });
   const name = actName(n, info.act.integration);
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = name;
+  a.rel = "noopener";
   a.style.display = "none";
   document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+  setTimeout(() => {
+    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  }, 0);
   return name;
 }
 async function pickFolder() {
@@ -820,13 +824,17 @@ async function makeCoverPdf(nos) {
 
 async function downloadPdf(bytes, name) {
   const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = name;
+  a.rel = "noopener";
   a.style.display = "none";
   document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+  setTimeout(() => {
+    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  }, 0);
 }
 
 $("pdfBtn").addEventListener("click", async () => {
