@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Сборка актов — MiskHub</title>
+  <title>Замечания — MiskHub</title>
   <meta name="theme-color" content="#070b14" />
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6">
   <link rel="apple-touch-icon" href="./assets/favicon.svg?v=6">
@@ -16,11 +16,14 @@
     .numbox { width: 100%; font-size: 32px; padding: 10px 12px; background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
     .cmt, .colname, textarea { background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
     .cmt { width: 100%; min-height: 48px; resize: vertical; }
+    .mini-photos { display: flex; gap: 4px; }
+    .mini-photos img, .mini-photos .ph { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: #09111e; border: 1px solid var(--line); cursor: pointer; }
+    .mini-photos .ph { display: grid; place-items: center; font-size: 10px; color: var(--mute); }
     .colname { background: transparent; border: 0; color: inherit; width: 110px; }
     .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
     .photos img { width: 100%; height: 100%; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
-    .slot { min-height: 320px; display: flex; flex-direction: column; }
-    .slot img, .slot .ph { flex: 1; min-height: 260px; }
+    .slot { min-height: 45vh; display: flex; flex-direction: column; }
+    .slot img, .slot .ph { flex: 1; min-height: 40vh; }
     .meta div { padding: 7px 0; border-bottom: 1px solid var(--line); }
     .meta div:last-child { border-bottom: 0; }
     .k { color: var(--mute); display: inline-block; width: 168px; }
@@ -59,7 +62,7 @@
   </header>
   <main>
     <section class="hero">
-            <h1>Сборка актов</h1>
+            <h1>Замечания</h1>
       <p class="lead">Выбери папку один раз. Введи номер. Дата акта — сегодня. Файл сохранится в ту же папку: <code>Акт об Устранении №123.docx</code>.</p>
     </section>
     <div id="files" style="margin:12px 0"></div>
@@ -83,9 +86,9 @@
   <input id="photoIn" type="file" accept="image/*" hidden>
   </main>
   <footer style="text-align:center">
-    <span style="opacity:.7">версия 1.4</span>
+    <span style="opacity:.7">версия 1.5</span>
   </footer>
-  <script src="./sborka.js?v=23"></script>
+  <script src="./sborka.js?v=24"></script>
   <script src="./hub-nav.js?v=9"></script>
 </body>
 </html>
