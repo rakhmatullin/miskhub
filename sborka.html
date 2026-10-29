@@ -17,13 +17,13 @@
     .cmt, .colname, textarea { background: #09111e; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
     .cmt { width: 100%; min-height: 48px; resize: vertical; }
     .mini-photos { display: flex; gap: 4px; }
-    .mini-photos img, .mini-photos .ph { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: #09111e; border: 1px solid var(--line); cursor: pointer; }
-    .mini-photos .ph { display: grid; place-items: center; font-size: 10px; color: var(--mute); }
+    .mini-photos img, .mini-photos .ph { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; background: #09111e; border: 1px solid var(--line); cursor: pointer; }
+    .mini-photos .ph { display: grid; place-items: center; font-size: 14px; color: var(--mute); }
     .colname { background: transparent; border: 0; color: inherit; width: 110px; }
     .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
-    .photos img { width: 100%; height: 100%; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
-    .slot { min-height: 45vh; display: flex; flex-direction: column; }
-    .slot img, .slot .ph { flex: 1; min-height: 40vh; }
+    .photos img { width: 100%; aspect-ratio: 4/3; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
+    .slot { display: flex; flex-direction: column; }
+    .slot img, .slot .ph { width: 100%; aspect-ratio: 4/3; }
     .meta div { padding: 7px 0; border-bottom: 1px solid var(--line); }
     .meta div:last-child { border-bottom: 0; }
     .k { color: var(--mute); display: inline-block; width: 168px; }
@@ -86,9 +86,9 @@
   <input id="photoIn" type="file" accept="image/*" hidden>
   </main>
   <footer style="text-align:center">
-    <span style="opacity:.7">версия 1.5</span>
+    <span style="opacity:.7">версия 1.6</span>
   </footer>
-  <script src="./sborka.js?v=24"></script>
+  <script src="./sborka.js?v=25"></script>
   <script src="./hub-nav.js?v=9"></script>
 </body>
 </html>
