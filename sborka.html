@@ -21,9 +21,9 @@
     .mini-photos .ph { display: grid; place-items: center; font-size: 14px; color: var(--mute); }
     .colname { background: transparent; border: 0; color: inherit; width: 110px; }
     .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
-    .photos img { width: 100%; aspect-ratio: 4/3; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
-    .slot { display: flex; flex-direction: column; }
-    .slot img, .slot .ph { width: 100%; aspect-ratio: 4/3; }
+    .photos img { width: 100%; max-width: 100%; aspect-ratio: 4/3; object-fit: contain; border-radius: 12px; background: #09111e; border: 1px solid var(--line); }
+    .slot { width: 100%; display: flex; flex-direction: column; }
+    .slot img, .slot .ph { width: 100%; max-width: 100%; aspect-ratio: 4/3; }
     .meta div { padding: 7px 0; border-bottom: 1px solid var(--line); }
     .meta div:last-child { border-bottom: 0; }
     .k { color: var(--mute); display: inline-block; width: 168px; }
@@ -86,9 +86,9 @@
   <input id="photoIn" type="file" accept="image/*" hidden>
   </main>
   <footer style="text-align:center">
-    <span style="opacity:.7">версия 1.8</span>
+    <span style="opacity:.7">версия 1.9</span>
   </footer>
-  <script src="./sborka.js?v=27"></script>
+  <script src="./sborka.js?v=28"></script>
   <script src="./hub-nav.js?v=9"></script>
 </body>
 </html>
