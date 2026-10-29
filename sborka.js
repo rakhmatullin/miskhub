@@ -1,4 +1,4 @@
-/* v2.5 */
+/* v2.6 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -487,6 +487,8 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
     const end = xml.indexOf("</w:p>", marker);
     if (start >= 0 && end > marker) xml = xml.slice(0, start) + xml.slice(end + "</w:p>".length);
   }
+  if (!xml.includes("xmlns:r=")) xml = xml.replace("<w:document ", '<w:document xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+  if (!xml.includes("xmlns:wp=")) xml = xml.replace("<w:document ", '<w:document xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ');
   if (!xml.includes("xmlns:a=")) {
     xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
   }
@@ -545,15 +547,16 @@ async function saveAct(n) {
   });
   const name = actName(n, info.act.integration);
   const url = URL.createObjectURL(blob);
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  document.body.appendChild(iframe);
-  const a = iframe.contentDocument.createElement("a");
+  const a = document.createElement("a");
   a.href = url;
   a.download = name;
-  iframe.contentDocument.body.appendChild(a);
-  a.click();
-  setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url); }, 500);
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  setTimeout(() => {
+    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  }, 0);
   return name;
 }
 async function pickFolder() {
