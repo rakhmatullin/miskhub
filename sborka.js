@@ -1,4 +1,4 @@
-/* v2.0 */
+/* v2.1 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -708,10 +708,10 @@ async function makeActPdf(n) {
   page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
   y -= 14;
   const intn = info.act.integration || "";
-  if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 9, font }); y -= 12; }
+  if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 8, font }); y -= 12; }
   page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
   y -= 14;
-  page.drawText("Описание:", { x: 40, y, size: 11, font });
+  page.drawText("Описание:", { x: 40, y, size: 8, font });
   y -= 14;
   // description with newline handling, fills to bottom
   let rest = (info.act.description || "—");
@@ -726,12 +726,12 @@ async function makeActPdf(n) {
         const cut = line.lastIndexOf(" ");
         if (cut > 30) line = line.slice(0, cut);
       }
-      page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
+      page.drawText(line, { x: 40, y, size: 8, font, maxWidth: 515 });
       p = p.slice(line.length).trimStart();
       y -= 12;
     }
     if (p && y > bottomLimit) {
-      page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
+      page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 8, font, maxWidth: 515 });
       y -= 12;
     }
     y -= 4; // gap between paragraphs
@@ -978,10 +978,10 @@ $("journalBtn").addEventListener("click", async () => {
         page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
         y -= 14;
         const intn = info.act.integration || "";
-        if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 9, font }); y -= 12; }
+        if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 8, font }); y -= 12; }
         page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
         y -= 14;
-        page.drawText("Описание:", { x: 40, y, size: 11, font });
+        page.drawText("Описание:", { x: 40, y, size: 8, font });
         y -= 14;
         let rest = (info.act.description || "—");
         const maxChars = 85;
@@ -995,12 +995,12 @@ $("journalBtn").addEventListener("click", async () => {
               const cut = line.lastIndexOf(" ");
               if (cut > 30) line = line.slice(0, cut);
             }
-            page.drawText(line, { x: 40, y, size: 9, font, maxWidth: 515 });
+            page.drawText(line, { x: 40, y, size: 8, font, maxWidth: 515 });
             p = p.slice(line.length).trimStart();
             y -= 12;
           }
           if (p && y > bottomLimit) {
-            page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 9, font, maxWidth: 515 });
+            page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 8, font, maxWidth: 515 });
             y -= 12;
           }
           y -= 4;
