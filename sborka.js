@@ -1,4 +1,4 @@
-/* v1.9 */
+/* v2.0 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -674,22 +674,18 @@ async function makeActPdf(n) {
   const font = await pdf.embedFont(await getCyrFont(), { subset: false });
   const W = 595, H = 842;
   const midY = H / 2;
-  const topMargin = 36;
-  const photoMaxH = midY - topMargin - 28;
-  const photoMaxW = W - 50;
-  page.drawText("Акт об устранении № " + n, { x: 40, y: H - 32, size: 14, font });
-  const intn = info.act.integration || "";
-  if (intn) page.drawText("Инт. № " + intn, { x: 40, y: H - 48, size: 9, font });
+  const photoMaxH = midY - 20;
+  const photoMaxW = W - 40;
   const entries = await listEntries();
   const before = findPhotoEntry(entries, n, 1);
   const after = findPhotoEntry(entries, n, 2);
   const slots = [];
-  if (before) slots.push({ e: before, label: "ДО" });
-  if (after) slots.push({ e: after, label: "ПОСЛЕ" });
+  if (before) slots.push({ e: before });
+  if (after) slots.push({ e: after });
   if (slots.length) {
-    const gap = 10;
+    const gap = 8;
     const slotW = (photoMaxW - (slots.length - 1) * gap) / slots.length;
-    const photoTop = H - 60;
+    const photoTop = H - 10;
     for (let i = 0; i < slots.length; i++) {
       try {
         const file = await slots[i].e.handle.getFile();
@@ -700,21 +696,22 @@ async function makeActPdf(n) {
         const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
         const dw = img.width * scale;
         const dh = img.height * scale;
-        const x = 25 + i * (slotW + gap) + (slotW - dw) / 2;
+        const x = 20 + i * (slotW + gap) + (slotW - dw) / 2;
         const y = photoTop - dh;
-        if (y > midY - 10) {
+        if (y > midY - 5) {
           page.drawImage(img, { x, y, width: dw, height: dh });
-          
         }
       } catch (err) { console.warn("photo", n, err); }
     }
   }
-  let y = midY - 8;
-  // dates first
+  let y = midY - 16;
+  page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
+  y -= 14;
+  const intn = info.act.integration || "";
+  if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 9, font }); y -= 12; }
   page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
-  y -= 16;
-  // act number + description header
-  page.drawText("Акт № " + n + "  Описание:", { x: 40, y, size: 11, font });
+  y -= 14;
+  page.drawText("Описание:", { x: 40, y, size: 11, font });
   y -= 14;
   // description with newline handling, fills to bottom
   let rest = (info.act.description || "—");
@@ -814,7 +811,7 @@ async function makeCoverPdf(nos) {
     page.drawText((cc.c1 || "").slice(0, 16), { x: 370, y, size: 7, font, maxWidth: 100 });
     page.drawText((cc.c2 || "").slice(0, 16), { x: 480, y, size: 7, font, maxWidth: 80 });
     y -= rowH;
-    if (y > 28) page.drawLine({ start: { x: 30, y: y + 14 }, end: { x: 565, y: y + 14 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
+    if (y > 28) page.drawLine({ start: { x: 30, y: y + 10 }, end: { x: 565, y: y + 10 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
   }
   return await pdf.save();
 }
@@ -939,7 +936,7 @@ $("journalBtn").addEventListener("click", async () => {
       coverPage.drawText((cc.c1 || "").slice(0, 16), { x: 370, y: cy, size: 7, font, maxWidth: 100 });
       coverPage.drawText((cc.c2 || "").slice(0, 16), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
       cy -= rowH;
-      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 14 }, end: { x: 565, y: cy + 14 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
+      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 10 }, end: { x: 565, y: cy + 10 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
     }
     // act pages
     for (const n of nos) {
@@ -949,20 +946,17 @@ $("journalBtn").addEventListener("click", async () => {
         const page = journal.addPage([595, 842]);
         const W = 595, H = 842;
         const midY = H / 2;
-        page.drawText("Акт об устранении № " + n, { x: 40, y: H - 32, size: 14, font });
-        const intn = info.act.integration || "";
-        if (intn) page.drawText("Инт. № " + intn, { x: 40, y: H - 48, size: 9, font });
+        const photoMaxH = midY - 20;
         const entries = await listEntries();
         const before = findPhotoEntry(entries, n, 1);
         const after = findPhotoEntry(entries, n, 2);
         const slots = [];
-        if (before) slots.push({ e: before, label: "ДО" });
-        if (after) slots.push({ e: after, label: "ПОСЛЕ" });
+        if (before) slots.push({ e: before });
+        if (after) slots.push({ e: after });
         if (slots.length) {
-          const gap = 10;
-          const slotW = (W - 50 - (slots.length - 1) * gap) / slots.length;
-          const photoMaxH = midY - 70;
-          const photoTop = H - 60;
+          const gap = 8;
+          const slotW = (W - 40 - (slots.length - 1) * gap) / slots.length;
+          const photoTop = H - 10;
           for (let i = 0; i < slots.length; i++) {
             try {
               const file = await slots[i].e.handle.getFile();
@@ -972,19 +966,22 @@ $("journalBtn").addEventListener("click", async () => {
               catch (_) { try { img = await journal.embedPng(bytes); } catch (__) { continue; } }
               const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
               const dw = img.width * scale, dh = img.height * scale;
-              const x = 25 + i * (slotW + gap) + (slotW - dw) / 2;
+              const x = 20 + i * (slotW + gap) + (slotW - dw) / 2;
               const y = photoTop - dh;
-              if (y > midY - 10) {
+              if (y > midY - 5) {
                 page.drawImage(img, { x, y, width: dw, height: dh });
-                
               }
             } catch (err) { console.warn("jphoto", n, err); }
           }
         }
-        let y = midY - 8;
+        let y = midY - 16;
+        page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
+        y -= 14;
+        const intn = info.act.integration || "";
+        if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 9, font }); y -= 12; }
         page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
-        y -= 16;
-        page.drawText("Акт № " + n + "  Описание:", { x: 40, y, size: 11, font });
+        y -= 14;
+        page.drawText("Описание:", { x: 40, y, size: 11, font });
         y -= 14;
         let rest = (info.act.description || "—");
         const maxChars = 85;
