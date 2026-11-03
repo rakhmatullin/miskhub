@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Акт ТТР — MiskHub</title>
+  <title>Фиксация ТТР — MiskHub</title>
   <meta name="theme-color" content="#070b14" />
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6" />
   <link rel="apple-touch-icon" href="./assets/favicon.svg?v=6" />
@@ -15,9 +15,8 @@
     .nums div { background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; }
     .nums b { display: block; font-size: 26px; letter-spacing: -0.03em; }
     .nums span { color: var(--mute); font-size: 11px; }
-    .sheet-wrap { background: #fff; border-radius: 12px; overflow: hidden; }
-    #sheet { width: 100%; height: auto; display: block; }
-    #frame { width: 100%; height: 70vh; border: 0; background: #fff; }
+    .sheet-wrap { background: #fff; border-radius: 12px; overflow: hidden; margin-top: 12px; }
+    #sheet, .act-canvas { width: 100%; height: auto; display: block; }
     .field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; color: var(--mute); font-size: 12px; }
     .field input, .field textarea, .field select {
       width: 100%; background: #09111e; color: var(--text); border: 1px solid var(--line);
@@ -40,6 +39,15 @@
     .switch b { color: var(--text); font-weight: 600; }
     .hint { color: var(--mute); font-size: 12px; margin: 6px 0 0; }
     code { font-size: 12px; }
+    .act-card { background: #09111e; border: 1px solid var(--line); border-radius: 14px; margin: 12px 0; overflow: hidden; }
+    .act-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #0c1626; cursor: pointer; }
+    .act-header input { flex: 1; background: transparent; border: 0; color: var(--text); font-size: 16px; font-weight: 600; }
+    .act-header input:focus { outline: 1px solid var(--line); }
+    .act-body { padding: 14px; display: none; }
+    .act-card.open .act-body { display: block; }
+    .act-card.open .chevron { transform: rotate(90deg); }
+    .chevron { transition: transform 0.15s; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
     @media (max-width: 900px) {
       .layout, .row3 { grid-template-columns: 1fr; }
       .hero h1 { font-size: 28px; }
@@ -58,52 +66,22 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · бланк УДМС · почта Mail.ru</p>
-      <h1>Акт фиксации ТТР</h1>
-      <p class="lead">Бланк тот же: шапка, объект, подписи. Меняются дата и три числа. План всегда равен факту. Утром файл сам уходит с рабочей почты.</p>
+      <h1>Фиксация ТТР</h1>
+      <p class="lead">Бланк тот же: шапка, объект, подписи. Меняются дата и три числа. План всегда равен факту. Можно несколько фиксаций. Утром файлы сами уходят с рабочей почты.</p>
     </section>
     <div id="msg"></div>
     <div class="layout">
       <section class="panel">
-        <label class="field" for="date">Дата акта
-          <input id="date" type="date" />
-        </label>
-        <div class="nums">
-          <div><b id="n-workers">—</b><span>рабочие</span></div>
-          <div><b id="n-itr">—</b><span>ИТР</span></div>
-          <div><b id="n-tech">—</b><span>техника</span></div>
-          <div><b id="n-sum">—</b><span>итого</span></div>
-        </div>
-        <p class="hint" id="day-status"></p>
-        <p class="hint">В акте у плана стоит звёздочка, факт без неё. Сумма считается сама. Время в бланке остаётся 10:00.</p>
+        <div id="acts"></div>
         <div class="toolbar">
-          <button type="button" class="primary" id="download">Скачать PDF</button>
-          <button type="button" id="reroll">Другие числа</button>
-          <button type="button" id="lock">Зафиксировать</button>
-        </div>
-        <div class="toolbar">
-          <button type="button" class="primary" id="send">Отправить сейчас</button>
-          <button type="button" id="resend">Отправить ещё раз</button>
-        </div>
-        <p class="hint" id="fname"></p>
-        <div class="sheet-wrap">
-          <canvas id="sheet"></canvas>
-          <iframe id="frame" title="Предпросмотр акта" hidden></iframe>
+          <button type="button" class="primary" id="add-act">Добавить фиксацию</button>
         </div>
       </section>
       <section class="panel">
-        <h2>Диапазоны</h2>
-        <p class="hint">Целые числа включительно. На уже зафиксированную дату диапазон не влияет.</p>
-        <div class="row2">
-          <label class="field">Рабочие от<input id="w-min" type="number" min="0" max="999" inputmode="numeric" /></label>
-          <label class="field">Рабочие до<input id="w-max" type="number" min="0" max="999" inputmode="numeric" /></label>
-          <label class="field">ИТР от<input id="i-min" type="number" min="0" max="999" inputmode="numeric" /></label>
-          <label class="field">ИТР до<input id="i-max" type="number" min="0" max="999" inputmode="numeric" /></label>
-          <label class="field">Техника от<input id="t-min" type="number" min="0" max="999" inputmode="numeric" /></label>
-          <label class="field">Техника до<input id="t-max" type="number" min="0" max="999" inputmode="numeric" /></label>
-        </div>
-        <h2>Письмо</h2>
+        <h2>Отправитель и расписание</h2>
+        <p class="hint">Общие для всех фиксаций. Не дублируются.</p>
         <div class="switch">
-          <div><b>Отправлять каждый день</b><div class="hint">После выбранного времени, один раз за дату.</div></div>
+          <div><b>Отправлять каждый день</b><div class="hint">После выбранного времени, один раз за дату для каждой фиксации.</div></div>
           <input id="enabled" type="checkbox" />
         </div>
         <div class="row2">
@@ -118,7 +96,7 @@
         <label class="field">Копия<textarea id="cc" placeholder="необязательно"></textarea></label>
         <label class="field">Тема<input id="subject" type="text" /></label>
         <label class="field">Текст<textarea id="body"></textarea></label>
-        <p class="hint">В теме и тексте: <code>{date}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{sum}</code> <code>{filename}</code></p>
+        <p class="hint">В теме и тексте: <code>{date}</code> <code>{name}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{sum}</code> <code>{filename}</code></p>
         <label class="field">Пароль Mail.ru<input id="password" type="password" autocomplete="new-password" placeholder="не менять, если уже сохранён" /></label>
         <p class="hint">Пароль не пишется в папку data: репозиторий публичный. Он уходит в секрет GitHub <code>TTR_MAIL_PASSWORD</code>. Для Mail.ru лучше пароль приложения: Настройки → Безопасность → Пароли для внешних приложений.</p>
         <details>
@@ -151,7 +129,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=2"></script>
-  <script src="./hub-nav.js?v=9"></script>
+  <script type="module" src="./ttr-app.js?v=3"></script>
+  <script src="./hub-nav.js?v=10"></script>
 </body>
 </html>
