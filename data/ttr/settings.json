@@ -43,7 +43,13 @@
           "min": 4,
           "max": 5
         }
-      }
+      },
+      "to": [
+        "rahmatullin.rr@mis-k.ru"
+      ],
+      "cc": [
+        "renrahman@gmail.com"
+      ]
     }
   ]
 }
