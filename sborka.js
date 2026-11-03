@@ -344,6 +344,7 @@ async function renderOpen() {
       (afterUrl ? '<img src="' + afterUrl + '" data-full="' + afterUrl + '" data-pick="' + r.act_no + ':2" title="ПОСЛЕ">' : '<div class="ph" data-pick="' + r.act_no + ':2">+</div>') +
       '</div>';
     rows += "<tr>" +
+      '<td><input type="checkbox" class="row-sel" data-n="' + r.act_no + '"></td>' +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
       '<td>' + esc(r.integration || "—") + "</td>" +
       "<td>" + esc(r.pred_date || "—") + "</td>" +
@@ -357,7 +358,7 @@ async function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th>' +
+    '<table class="table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Фото</th>' +
     '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '</tr></thead><tbody>' +
@@ -393,6 +394,31 @@ async function renderOpen() {
   wireSlots();
   const sortBtn = host.querySelector("#sortBtn");
   if (sortBtn) sortBtn.addEventListener("click", () => { sortDesc = !sortDesc; renderOpen(); });
+
+  // Чекбоксы ↔ поле номеров
+  function syncFromChecks() {
+    const selected = [...host.querySelectorAll(".row-sel:checked")].map(el => el.dataset.n);
+    const num = $("num");
+    if (num) {
+      num.value = selected.join(" ");
+      num.dispatchEvent(new Event("input"));
+    }
+  }
+  host.querySelectorAll(".row-sel").forEach(el => {
+    el.addEventListener("change", syncFromChecks);
+  });
+  const selAll = host.querySelector("#selAll");
+  if (selAll) {
+    selAll.addEventListener("change", () => {
+      host.querySelectorAll(".row-sel").forEach(el => { el.checked = selAll.checked; });
+      syncFromChecks();
+    });
+  }
+  // Применить текущее значение поля к чекбоксам
+  const current = expandNumbers(($("num") && $("num").value) || "");
+  const set = new Set(current.map(String));
+  host.querySelectorAll(".row-sel").forEach(el => { el.checked = set.has(el.dataset.n); });
+  if (selAll) selAll.checked = host.querySelectorAll(".row-sel").length > 0 && host.querySelectorAll(".row-sel:not(:checked)").length === 0;
 }
 
 function render(d) {
@@ -1039,6 +1065,7 @@ $("photoIn").addEventListener("change", async () => {
     await savePhoto(n, slot, file);
     render(await lookup(n));
     wireSlots();
+    await renderOpen();
     $("hint").textContent = "Фото сохранено: " + n + "_" + slot + ".jpg";
   } catch (e) {
     $("hint").textContent = "";
@@ -1064,7 +1091,13 @@ document.addEventListener("click", (e) => {
       inp.click();
     }
   };
-  overlay.onclick = (ev) => { if (ev.target === overlay) overlay.remove(); };
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+  const onEsc = (e) => { if (e.key === "Escape") close(); };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onEsc);
+  }
+  document.addEventListener("keydown", onEsc);
   document.body.appendChild(overlay);
 });
 
