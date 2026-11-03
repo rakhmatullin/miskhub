@@ -1,19 +1,5 @@
 {
-  "version": 1,
-  "ranges": {
-    "workers": {
-      "min": 13,
-      "max": 15
-    },
-    "itr": {
-      "min": 4,
-      "max": 5
-    },
-    "tech": {
-      "min": 4,
-      "max": 5
-    }
-  },
+  "version": 2,
   "mail": {
     "enabled": true,
     "from": "rahmatullin.rr@mis-k.ru",
@@ -37,7 +23,27 @@
     "cc": [
       "renrahman@gmail.com"
     ],
-    "subject": "Акт фиксации ТТР {date}",
-    "body": "Добрый день.\n\nЧисленность по объекту «Люблинка»:\n{date} — {sum} человек (рабочие — {workers}, ИТР — {itr}, машинисты спецтехники — {tech})\n\nС уважением,\nРахматуллин Ренат"
-  }
+    "subject": "Фиксация ТТР {date} — {name}",
+    "body": "Добрый день.\n\nЧисленность по объекту «Люблинка» ({name}):\n{date} — {sum} человек (рабочие — {workers}, ИТР — {itr}, машинисты спецтехники — {tech})\n\nС уважением,\nРахматуллин Ренат"
+  },
+  "acts": [
+    {
+      "id": "default",
+      "name": "Люблинка",
+      "ranges": {
+        "workers": {
+          "min": 13,
+          "max": 15
+        },
+        "itr": {
+          "min": 4,
+          "max": 5
+        },
+        "tech": {
+          "min": 4,
+          "max": 5
+        }
+      }
+    }
+  ]
 }

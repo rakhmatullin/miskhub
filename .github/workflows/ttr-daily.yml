@@ -1,14 +1,18 @@
-name: Акт ТТР
+name: Фиксация ТТР
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto — по расписанию, now — отправить сейчас, resend — отправить повторно"
+        description: "auto — по расписанию, now — отправить сейчас"
         type: string
         default: now
       date:
         description: "Дата YYYY-MM-DD. Пусто — сегодня по Москве."
+        type: string
+        required: false
+      act:
+        description: "ID фиксации. Пусто — все (для auto) или default."
         type: string
         required: false
 
@@ -37,6 +41,7 @@ jobs:
           TTR_MAIL_PASSWORD: ${{ secrets.TTR_MAIL_PASSWORD }}
           TTR_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'auto' }}
           TTR_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.date || '' }}
+          TTR_ACT: ${{ github.event_name == 'workflow_dispatch' && inputs.act || '' }}
       - name: Записать журнал
         if: always()
         run: |

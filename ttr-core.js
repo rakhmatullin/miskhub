@@ -1,10 +1,5 @@
 export const DEFAULTS = {
-  version: 1,
-  ranges: {
-    workers: { min: 13, max: 15 },
-    itr: { min: 4, max: 5 },
-    tech: { min: 4, max: 5 },
-  },
+  version: 2,
   mail: {
     enabled: false,
     from: "",
@@ -16,9 +11,20 @@ export const DEFAULTS = {
     weekdays: [0, 1, 2, 3, 4, 5, 6],
     to: [],
     cc: [],
-    subject: "Акт фиксации ТТР {date}",
-    body: "Добрый день.\n\nНаправляю акт фиксации технических и трудовых ресурсов на {date}.\nРабочие — {workers}, ИТР — {itr}, машинисты спецтехники — {tech}. Итого — {sum}.\n\nС уважением,\nРахматуллин Ренат",
+    subject: "Фиксация ТТР {date} — {name}",
+    body: "Добрый день.\n\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\nРабочие — {workers}, ИТР — {itr}, машинисты спецтехники — {tech}. Итого — {sum}.\n\nС уважением,\nРахматуллин Ренат",
   },
+  acts: [
+    {
+      id: "default",
+      name: "Основной",
+      ranges: {
+        workers: { min: 13, max: 15 },
+        itr: { min: 4, max: 5 },
+        tech: { min: 4, max: 5 },
+      },
+    },
+  ],
 };
 
 export function hash(s) {
@@ -45,20 +51,38 @@ export function clampPair(pair) {
   return { min, max };
 }
 
+function normalizeAct(raw, idx = 0) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const id = String(src.id || `act${idx + 1}`).trim() || `act${idx + 1}`;
+  const name = String(src.name || `Акт ${idx + 1}`).trim() || `Акт ${idx + 1}`;
+  const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
+  return {
+    id,
+    name,
+    ranges: {
+      workers: clampPair(ranges.workers || DEFAULTS.acts[0].ranges.workers),
+      itr: clampPair(ranges.itr || DEFAULTS.acts[0].ranges.itr),
+      tech: clampPair(ranges.tech || DEFAULTS.acts[0].ranges.tech),
+    },
+  };
+}
+
 export function normalizeSettings(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
   const mail = src.mail && typeof src.mail === "object" ? src.mail : {};
-  const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
   let weekdays = Array.isArray(mail.weekdays) ? mail.weekdays.map((n) => Number(n)).filter((n) => n >= 0 && n <= 6) : DEFAULTS.mail.weekdays.slice();
   weekdays = [...new Set(weekdays)];
   const sendTime = /^\d{2}:\d{2}$/.test(mail.sendTime || "") ? mail.sendTime : DEFAULTS.mail.sendTime;
+
+  let acts = Array.isArray(src.acts) ? src.acts.map(normalizeAct) : [];
+  if (!acts.length) {
+    // migrate from v1 ranges
+    const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
+    acts = [normalizeAct({ id: "default", name: "Основной", ranges })];
+  }
+
   return {
-    version: 1,
-    ranges: {
-      workers: clampPair(ranges.workers || DEFAULTS.ranges.workers),
-      itr: clampPair(ranges.itr || DEFAULTS.ranges.itr),
-      tech: clampPair(ranges.tech || DEFAULTS.ranges.tech),
-    },
+    version: 2,
     mail: {
       enabled: Boolean(mail.enabled),
       from: String(mail.from || "").trim(),
@@ -73,6 +97,7 @@ export function normalizeSettings(raw) {
       subject: String(mail.subject || DEFAULTS.mail.subject),
       body: String(mail.body ?? DEFAULTS.mail.body),
     },
+    acts,
   };
 }
 
@@ -111,12 +136,13 @@ export function weekdayIndex(iso) {
   return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
 }
 
-export function filenameFor(iso) {
-  return `Акт фиксации ТТР ${isoToRu(iso)}.pdf`;
+export function filenameFor(iso, name = "") {
+  const base = `Фиксация ТТР ${isoToRu(iso)}`;
+  return name ? `${base} — ${name}.pdf` : `${base}.pdf`;
 }
 
 export function fill(template, ctx) {
-  return String(template || "").replace(/\{(date|workers|itr|tech|sum|filename)\}/g, (_, key) => String(ctx[key] ?? ""));
+  return String(template || "").replace(/\{(date|workers|itr|tech|sum|filename|name)\}/g, (_, key) => String(ctx[key] ?? ""));
 }
 
 function rollBetween(iso, key, min, max) {
@@ -153,8 +179,8 @@ function nudge(n, ranges, iso) {
   return n;
 }
 
-function lockedOf(journal, iso) {
-  const day = journal?.days?.[iso];
+function lockedOf(journalAct, iso) {
+  const day = journalAct?.days?.[iso];
   if (!day || !day.locked) return null;
   const workers = Math.round(Number(day.workers));
   const itr = Math.round(Number(day.itr));
@@ -163,12 +189,12 @@ function lockedOf(journal, iso) {
   return { workers, itr, tech, sum: workers + itr + tech, status: day.status || "locked", note: day.note || "" };
 }
 
-export function numbersFor(iso, ranges, journal) {
-  const locked = lockedOf(journal, iso);
+export function numbersFor(iso, ranges, journalAct) {
+  const locked = lockedOf(journalAct, iso);
   if (locked) return { ...locked, locked: true };
   let n = rollDay(iso, ranges);
   const prevIso = addDays(iso, -1);
-  const prev = lockedOf(journal, prevIso) || rollDay(prevIso, ranges);
+  const prev = lockedOf(journalAct, prevIso) || rollDay(prevIso, ranges);
   if (sameTriple(n, prev)) n = nudge(n, ranges, iso);
   return {
     workers: n.workers,
@@ -181,14 +207,15 @@ export function numbersFor(iso, ranges, journal) {
   };
 }
 
-export function contextFor(iso, numbers) {
+export function contextFor(iso, numbers, name = "") {
   return {
     date: isoToRu(iso),
     workers: numbers.workers,
     itr: numbers.itr,
     tech: numbers.tech,
     sum: numbers.sum,
-    filename: filenameFor(iso),
+    filename: filenameFor(iso, name),
+    name,
   };
 }
 
@@ -207,4 +234,15 @@ export function moscowMinutesNow() {
   const h = Number(parts.find((p) => p.type === "hour")?.value || 0);
   const m = Number(parts.find((p) => p.type === "minute")?.value || 0);
   return h * 60 + m;
+}
+
+export function ensureJournal(journal) {
+  const j = journal && typeof journal === "object" ? journal : {};
+  if (!j.acts) {
+    // migrate v1
+    j.acts = { default: { days: j.days || {} } };
+    delete j.days;
+  }
+  j.acts ||= {};
+  return j;
 }
