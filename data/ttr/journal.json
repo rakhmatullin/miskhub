@@ -46,10 +46,34 @@
           "locked": true,
           "status": "sent",
           "sentAt": "2026-10-22T06:42:00.000Z",
-          "to": ["rahmatullin.rr@mis-k.ru"],
-          "cc": ["renrahman@gmail.com"],
+          "to": [
+            "rahmatullin.rr@mis-k.ru"
+          ],
+          "cc": [
+            "renrahman@gmail.com"
+          ],
           "filename": "Акт фиксации ТТР 22.10.2026.pdf",
           "messageId": "<example>",
+          "error": "",
+          "attempts": 1
+        },
+        "2026-11-03": {
+          "workers": 13,
+          "itr": 5,
+          "tech": 4,
+          "sum": 22,
+          "locked": true,
+          "status": "sent",
+          "note": "",
+          "sentAt": "2026-11-03T13:18:16.506Z",
+          "to": [
+            "rahmatullin.rr@mis-k.ru"
+          ],
+          "cc": [
+            "renrahman@gmail.com"
+          ],
+          "filename": "Фиксация ТТР 03.11.2026 — Люблинка.pdf",
+          "messageId": "<ce7d4818-431b-d4e7-4812-ff58caff5269@mis-k.ru>",
           "error": "",
           "attempts": 1
         }
