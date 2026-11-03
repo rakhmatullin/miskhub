@@ -79,9 +79,9 @@
       </section>
       <section class="panel">
         <h2>Отправитель и расписание</h2>
-        <p class="hint">Общие для всех фиксаций. Не дублируются.</p>
+        <p class="hint">Общие: отправитель, время и дни. Адресаты задаются отдельно в каждой фиксации.</p>
         <div class="switch">
-          <div><b>Отправлять каждый день</b><div class="hint">После выбранного времени, один раз за дату для каждой фиксации.</div></div>
+          <div><b>Автоотправка</b><div class="hint">В выбранные дни недели, после указанного времени. Один раз за дату для каждой фиксации.</div></div>
           <input id="enabled" type="checkbox" />
         </div>
         <div class="row2">
@@ -92,8 +92,6 @@
         <label class="field">От кого, ящик Mail.ru<input id="from" type="email" autocomplete="off" placeholder="name@mis-k.ru" /></label>
         <label class="field">Имя отправителя<input id="from-name" type="text" /></label>
         <label class="field">Сервер<input id="smtp" type="text" /></label>
-        <label class="field">Кому, по одному адресу в строке<textarea id="to" placeholder="name@company.ru"></textarea></label>
-        <label class="field">Копия<textarea id="cc" placeholder="необязательно"></textarea></label>
         <label class="field">Тема<input id="subject" type="text" /></label>
         <label class="field">Текст<textarea id="body"></textarea></label>
         <p class="hint">В теме и тексте: <code>{date}</code> <code>{name}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{sum}</code> <code>{filename}</code></p>
@@ -129,7 +127,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=3"></script>
+  <script type="module" src="./ttr-app.js?v=4"></script>
   <script src="./hub-nav.js?v=10"></script>
 </body>
 </html>

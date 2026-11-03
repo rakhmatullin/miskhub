@@ -83,8 +83,10 @@ async function sendOne(act, iso) {
     if (day.status === "error" && (day.attempts || 0) >= 4) { console.log("skip: четыре неудачные попытки, нужно поправить настройки"); return; }
   }
 
-  if (!settings.mail.to.length) {
-    dayFail(act, iso, numbers, filename, "Нет адресатов. Укажи их на странице и сохрани.");
+  const toList = (act.to && act.to.length) ? act.to : settings.mail.to;
+  const ccList = (act.cc && act.cc.length) ? act.cc : settings.mail.cc;
+  if (!toList.length) {
+    dayFail(act, iso, numbers, filename, "Нет адресатов для этой фиксации. Укажи их в карточке и сохрани.");
     return;
   }
   if (!settings.mail.from) {
@@ -119,8 +121,8 @@ async function sendOne(act, iso) {
     });
     const info = await transport.sendMail({
       from,
-      to: settings.mail.to.join(", "),
-      cc: settings.mail.cc.length ? settings.mail.cc.join(", ") : undefined,
+      to: toList.join(", "),
+      cc: ccList.length ? ccList.join(", ") : undefined,
       subject: fill(settings.mail.subject, ctx),
       text: fill(settings.mail.body, ctx),
       attachments: [{ filename, content: Buffer.from(pdf), contentType: "application/pdf" }],
@@ -131,15 +133,15 @@ async function sendOne(act, iso) {
       locked: true,
       status: "sent",
       sentAt: new Date().toISOString(),
-      to: settings.mail.to,
-      cc: settings.mail.cc,
+      to: toList,
+      cc: ccList,
       filename,
       messageId: info.messageId || "",
       error: "",
       attempts: (day.attempts || 0) + 1,
     };
     writeJournal(journal);
-    console.log(`sent ${iso} ${act.id} ${filename} -> ${settings.mail.to.join(", ")}`);
+    console.log(`sent ${iso} ${act.id} ${filename} -> ${toList.join(", ")}`);
   } catch (err) {
     dayFail(act, iso, numbers, filename, err && err.message ? err.message : String(err));
   }

@@ -63,8 +63,8 @@ function readMail() {
     smtpPort: $("port").value,
     sendTime: $("send-time").value,
     weekdays: selectedDays(),
-    to: $("to").value,
-    cc: $("cc").value,
+    to: [],
+    cc: [],
     subject: $("subject").value,
     body: $("body").value,
   };
@@ -80,7 +80,9 @@ function readActs() {
       itr: { min: card.querySelector(".i-min").value, max: card.querySelector(".i-max").value },
       tech: { min: card.querySelector(".t-min").value, max: card.querySelector(".t-max").value },
     };
-    return { id, name, ranges };
+    const to = (card.querySelector(".act-to")?.value || "").split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    const cc = (card.querySelector(".act-cc")?.value || "").split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    return { id, name, ranges, to, cc };
   });
 }
 
@@ -99,8 +101,7 @@ function writeMail(settings) {
   $("smtp").value = s.mail.smtpHost;
   $("port").value = s.mail.smtpPort;
   $("send-time").value = s.mail.sendTime;
-  $("to").value = s.mail.to.join("\n");
-  $("cc").value = s.mail.cc.join("\n");
+  // recipients are per-act now
   $("subject").value = s.mail.subject;
   $("body").value = s.mail.body;
   for (const btn of document.querySelectorAll("#days button")) {
@@ -313,7 +314,7 @@ function createActCard(act, open = true) {
   card.innerHTML = `
     <div class="act-header">
       <span class="chevron">▸</span>
-      <input class="act-name" value="${act.name.replace(/"/g, """)}" />
+      <input class="act-name" value="${act.name.replace(/"/g, "&quot;")}" />
       <button type="button" class="remove-act" title="Удалить">×</button>
     </div>
     <div class="act-body">
@@ -336,6 +337,12 @@ function createActCard(act, open = true) {
         <label class="field">Техника от<input class="t-min" type="number" min="0" max="999" value="${act.ranges.tech.min}" /></label>
         <label class="field">Техника до<input class="t-max" type="number" min="0" max="999" value="${act.ranges.tech.max}" /></label>
       </div>
+      <label class="field">Кому (адресаты этой фиксации, по одному в строке)
+        <textarea class="act-to" placeholder="name@company.ru">${(act.to || []).join("\n")}</textarea>
+      </label>
+      <label class="field">Копия
+        <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\n")}</textarea>
+      </label>
       <div class="toolbar">
         <button type="button" class="primary act-download">Скачать PDF</button>
         <button type="button" class="act-reroll">Другие числа</button>
@@ -401,6 +408,8 @@ function addAct(act = null) {
     id,
     name: "Фиксация " + (document.querySelectorAll(".act-card").length + 1),
     ranges: { workers: { min: 13, max: 15 }, itr: { min: 4, max: 5 }, tech: { min: 4, max: 5 } },
+    to: [],
+    cc: [],
   };
   const card = createActCard(newAct, true);
   $("acts").appendChild(card);
@@ -417,8 +426,8 @@ async function saveSettings() {
     return;
   }
   const settings = readForm();
-  if (settings.mail.enabled && !settings.mail.to.length) {
-    msg("Включил отправку, но не указал, кому писать.", "bad");
+  if (settings.mail.enabled && settings.acts.some(a => !a.to.length)) {
+    msg("Включена автоотправка, но у какой-то фиксации нет адресатов. Укажи их в карточке.", "bad");
     return false;
   }
   if (settings.mail.enabled && !settings.mail.from) {

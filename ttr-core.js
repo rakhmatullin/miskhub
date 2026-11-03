@@ -64,6 +64,8 @@ function normalizeAct(raw, idx = 0) {
       itr: clampPair(ranges.itr || DEFAULTS.acts[0].ranges.itr),
       tech: clampPair(ranges.tech || DEFAULTS.acts[0].ranges.tech),
     },
+    to: parseList(src.to),
+    cc: parseList(src.cc),
   };
 }
 
