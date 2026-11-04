@@ -76,6 +76,26 @@
           "messageId": "<ce7d4818-431b-d4e7-4812-ff58caff5269@mis-k.ru>",
           "error": "",
           "attempts": 1
+        },
+        "2026-11-04": {
+          "workers": 14,
+          "itr": 4,
+          "tech": 5,
+          "sum": 23,
+          "locked": true,
+          "status": "sent",
+          "note": "",
+          "sentAt": "2026-11-04T13:19:55.287Z",
+          "to": [
+            "rahmatullin.rr@mis-k.ru"
+          ],
+          "cc": [
+            "renrahman@gmail.com"
+          ],
+          "filename": "Фиксация ТТР 04.11.2026 — Люблинка.pdf",
+          "messageId": "<63e19dcf-9d93-7a4e-8f4a-f68b347a0eef@mis-k.ru>",
+          "error": "",
+          "attempts": 1
         }
       }
     }
