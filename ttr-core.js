@@ -18,11 +18,21 @@ export const DEFAULTS = {
     {
       id: "default",
       name: "Основной",
-      ranges: {
-        workers: { min: 13, max: 15 },
-        itr: { min: 4, max: 5 },
-        tech: { min: 4, max: 5 },
-      },
+      subject: "Фиксация ТТР {date} — {name}",
+      body: "Добрый день.\n\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\n\n{objects}\n\nС уважением,\nРахматуллин Ренат",
+      to: [],
+      cc: [],
+      objects: [
+        {
+          number: "1",
+          name: "Основной объект",
+          ranges: {
+            workers: { min: 13, max: 15 },
+            itr: { min: 4, max: 5 },
+            tech: { min: 4, max: 5 },
+          },
+        },
+      ],
     },
   ],
 };
@@ -51,21 +61,38 @@ export function clampPair(pair) {
   return { min, max };
 }
 
+function normalizeObject(raw, idx = 0) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
+  return {
+    number: String(src.number || String(idx + 1)).trim() || String(idx + 1),
+    name: String(src.name || `Объект ${idx + 1}`).trim() || `Объект ${idx + 1}`,
+    ranges: {
+      workers: clampPair(ranges.workers || { min: 13, max: 15 }),
+      itr: clampPair(ranges.itr || { min: 4, max: 5 }),
+      tech: clampPair(ranges.tech || { min: 4, max: 5 }),
+    },
+  };
+}
+
 function normalizeAct(raw, idx = 0) {
   const src = raw && typeof raw === "object" ? raw : {};
   const id = String(src.id || `act${idx + 1}`).trim() || `act${idx + 1}`;
-  const name = String(src.name || `Акт ${idx + 1}`).trim() || `Акт ${idx + 1}`;
-  const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
+  const name = String(src.name || `Фиксация ${idx + 1}`).trim() || `Фиксация ${idx + 1}`;
+  let objects = Array.isArray(src.objects) ? src.objects.map(normalizeObject) : [];
+  if (!objects.length) {
+    // migrate from old ranges on the act
+    const ranges = src.ranges && typeof src.ranges === "object" ? src.ranges : {};
+    objects = [normalizeObject({ number: "1", name: name || "Объект", ranges })];
+  }
   return {
     id,
     name,
-    ranges: {
-      workers: clampPair(ranges.workers || DEFAULTS.acts[0].ranges.workers),
-      itr: clampPair(ranges.itr || DEFAULTS.acts[0].ranges.itr),
-      tech: clampPair(ranges.tech || DEFAULTS.acts[0].ranges.tech),
-    },
+    subject: String(src.subject || DEFAULTS.acts[0].subject),
+    body: String(src.body ?? DEFAULTS.acts[0].body),
     to: parseList(src.to),
     cc: parseList(src.cc),
+    objects,
   };
 }
 
@@ -144,7 +171,7 @@ export function filenameFor(iso, name = "") {
 }
 
 export function fill(template, ctx) {
-  return String(template || "").replace(/\{(date|workers|itr|tech|sum|filename|name)\}/g, (_, key) => String(ctx[key] ?? ""));
+  return String(template || "").replace(/\{(date|workers|itr|tech|sum|filename|name|objects)\}/g, (_, key) => String(ctx[key] ?? ""));
 }
 
 function rollBetween(iso, key, min, max) {

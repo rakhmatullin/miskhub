@@ -54,8 +54,30 @@ function finish(message) {
 async function sendOne(act, iso) {
   const jact = journal.acts[act.id] ||= { days: {} };
   const day = jact.days[iso] || {};
-  const numbers = numbersFor(iso, act.ranges, jact);
-  const ctx = contextFor(iso, numbers, act.name);
+  const objects = act.objects || [{ number: "1", name: act.name, ranges: act.ranges || {} }];
+  const objResults = objects.map((obj) => {
+    const numbers = numbersFor(iso, obj.ranges, jact);
+    return { ...obj, numbers };
+  });
+  const total = objResults.reduce((a, o) => ({
+    workers: a.workers + o.numbers.workers,
+    itr: a.itr + o.numbers.itr,
+    tech: a.tech + o.numbers.tech,
+    sum: a.sum + o.numbers.sum,
+  }), { workers: 0, itr: 0, tech: 0, sum: 0 });
+  const objectsText = objResults.map((o) =>
+    `${o.number}. ${o.name}: рабочие — ${o.numbers.workers}, ИТР — ${o.numbers.itr}, техника — ${o.numbers.tech} (итого ${o.numbers.sum})`
+  ).join("\n");
+  const ctx = {
+    date: isoToRu(iso),
+    name: act.name,
+    workers: total.workers,
+    itr: total.itr,
+    tech: total.tech,
+    sum: total.sum,
+    objects: objectsText,
+    filename: filenameFor(iso, act.name),
+  };
   const filename = filenameFor(iso, act.name);
 
   if (dry) {
@@ -100,16 +122,24 @@ async function sendOne(act, iso) {
   }
 
   const makePdf = createMakePdf({ PDFDocument, rgb }, fontkit);
-  const pdf = await makePdf(readFileSync(templatePath), readFileSync(fontPath), {
-    dateLabel: `Дата: ${isoToRu(iso)}`,
-    workers: numbers.workers,
-    itr: numbers.itr,
-    tech: numbers.tech,
-  });
+  const attachments = [];
+  for (const o of objResults) {
+    const pdf = await makePdf(readFileSync(templatePath), readFileSync(fontPath), {
+      dateLabel: `Дата: ${isoToRu(iso)}`,
+      workers: o.numbers.workers,
+      itr: o.numbers.itr,
+      tech: o.numbers.tech,
+    });
+    const objFilename = filenameFor(iso, `${act.name} — ${o.number} ${o.name}`);
+    attachments.push({ filename: objFilename, content: Buffer.from(pdf), contentType: "application/pdf" });
+  }
 
   const from = settings.mail.fromName
     ? `"${settings.mail.fromName.replace(/"/g, "")}" <${settings.mail.from}>`
     : settings.mail.from;
+
+  const subject = fill(act.subject || settings.mail.subject, ctx);
+  const text = fill(act.body || settings.mail.body, ctx);
 
   try {
     const transport = nodemailer.createTransport({
@@ -123,13 +153,13 @@ async function sendOne(act, iso) {
       from,
       to: toList.join(", "),
       cc: ccList.length ? ccList.join(", ") : undefined,
-      subject: fill(settings.mail.subject, ctx),
-      text: fill(settings.mail.body, ctx),
-      attachments: [{ filename, content: Buffer.from(pdf), contentType: "application/pdf" }],
+      subject,
+      text,
+      attachments,
     });
     jact.days[iso] = {
-      ...numbers,
-      sum: numbers.sum,
+      objects: objResults.map((o) => ({ number: o.number, name: o.name, ...o.numbers })),
+      sum: total.sum,
       locked: true,
       status: "sent",
       sentAt: new Date().toISOString(),

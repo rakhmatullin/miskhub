@@ -65,8 +65,8 @@ function readMail() {
     weekdays: selectedDays(),
     to: [],
     cc: [],
-    subject: $("subject").value,
-    body: $("body").value,
+    subject: "",
+    body: "",
   };
 }
 
@@ -75,14 +75,20 @@ function readActs() {
   return [...cards].map((card) => {
     const id = card.dataset.id;
     const name = card.querySelector(".act-name").value.trim() || "Фиксация";
-    const ranges = {
-      workers: { min: card.querySelector(".w-min").value, max: card.querySelector(".w-max").value },
-      itr: { min: card.querySelector(".i-min").value, max: card.querySelector(".i-max").value },
-      tech: { min: card.querySelector(".t-min").value, max: card.querySelector(".t-max").value },
-    };
+    const subject = card.querySelector(".act-subject")?.value || "";
+    const body = card.querySelector(".act-body-text")?.value || "";
     const to = (card.querySelector(".act-to")?.value || "").split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
     const cc = (card.querySelector(".act-cc")?.value || "").split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
-    return { id, name, ranges, to, cc };
+    const objects = [...card.querySelectorAll(".object-row")].map((row) => ({
+      number: row.querySelector(".obj-number").value.trim() || "1",
+      name: row.querySelector(".obj-name").value.trim() || "Объект",
+      ranges: {
+        workers: { min: row.querySelector(".w-min").value, max: row.querySelector(".w-max").value },
+        itr: { min: row.querySelector(".i-min").value, max: row.querySelector(".i-max").value },
+        tech: { min: row.querySelector(".t-min").value, max: row.querySelector(".t-max").value },
+      },
+    }));
+    return { id, name, subject, body, to, cc, objects };
   });
 }
 
@@ -102,8 +108,6 @@ function writeMail(settings) {
   $("port").value = s.mail.smtpPort;
   $("send-time").value = s.mail.sendTime;
   // recipients are per-act now
-  $("subject").value = s.mail.subject;
-  $("body").value = s.mail.body;
   for (const btn of document.querySelectorAll("#days button")) {
     btn.classList.toggle("on", s.mail.weekdays.includes(Number(btn.dataset.d)));
   }
@@ -238,25 +242,62 @@ async function paint(card, bytes) {
   }
 }
 
+function objectsFor(card) {
+  const id = card.dataset.id;
+  const iso = actDate(card);
+  const rows = [...card.querySelectorAll(".object-row")];
+  return rows.map((row) => {
+    const ranges = {
+      workers: { min: Number(row.querySelector(".w-min").value), max: Number(row.querySelector(".w-max").value) },
+      itr: { min: Number(row.querySelector(".i-min").value), max: Number(row.querySelector(".i-max").value) },
+      tech: { min: Number(row.querySelector(".t-min").value), max: Number(row.querySelector(".t-max").value) },
+    };
+    const key = id + ":" + (row.querySelector(".obj-number").value || "1");
+    let numbers;
+    if (manuals[key] && manuals[key].iso === iso) {
+      const m = manuals[key];
+      numbers = { ...m, sum: m.workers + m.itr + m.tech, locked: false };
+    } else {
+      const jact = journal.acts?.[id] || { days: {} };
+      numbers = numbersFor(iso, ranges, jact);
+    }
+    return {
+      number: row.querySelector(".obj-number").value.trim() || "1",
+      name: row.querySelector(".obj-name").value.trim() || "Объект",
+      ranges,
+      numbers,
+      row,
+    };
+  });
+}
+
 async function refreshAct(card) {
   const id = card.dataset.id;
   const iso = actDate(card);
-  const numbers = shownFor(card);
-  card.querySelector(".n-workers").textContent = numbers.workers;
-  card.querySelector(".n-itr").textContent = numbers.itr;
-  card.querySelector(".n-tech").textContent = numbers.tech;
-  card.querySelector(".n-sum").textContent = numbers.sum;
+  const objs = objectsFor(card);
+  let totalW = 0, totalI = 0, totalT = 0;
+  for (const o of objs) {
+    o.row.querySelector(".on-w").textContent = o.numbers.workers;
+    o.row.querySelector(".on-i").textContent = o.numbers.itr;
+    o.row.querySelector(".on-t").textContent = o.numbers.tech;
+    o.row.querySelector(".on-s").textContent = o.numbers.sum;
+    totalW += o.numbers.workers;
+    totalI += o.numbers.itr;
+    totalT += o.numbers.tech;
+  }
   const name = card.querySelector(".act-name").value.trim();
-  card.querySelector(".fname").textContent = filenameFor(iso, name);
+  card.querySelector(".fname").textContent = filenameFor(iso, name) + (objs.length > 1 ? ` (+${objs.length - 1} объектов)` : "");
   const jact = journal.acts?.[id] || { days: {} };
   const day = jact.days?.[iso];
-  card.querySelector(".day-status").textContent = statusText({ ...day, id }, numbers, iso);
-  if (!templateBytes || !fontBytes) return;
+  const first = objs[0]?.numbers || { workers: 0, itr: 0, tech: 0, sum: 0, locked: false };
+  card.querySelector(".day-status").textContent = statusText({ ...day, id }, first, iso) + (objs.length > 1 ? ` · ${objs.length} объектов` : "");
+  if (!templateBytes || !fontBytes || !objs.length) return;
+  // Preview first object
   const bytes = await makePdf(templateBytes, fontBytes, {
     dateLabel: "Дата: " + isoToRu(iso),
-    workers: numbers.workers,
-    itr: numbers.itr,
-    tech: numbers.tech,
+    workers: objs[0].numbers.workers,
+    itr: objs[0].numbers.itr,
+    tech: objs[0].numbers.tech,
   });
   await paint(card, bytes);
 }
@@ -307,42 +348,63 @@ function buildDays() {
   });
 }
 
+function objectRowHtml(obj, idx) {
+  const o = obj || { number: String(idx + 1), name: "Объект " + (idx + 1), ranges: { workers: {min:13,max:15}, itr:{min:4,max:5}, tech:{min:4,max:5} } };
+  return `
+    <div class="object-row" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#0a1422">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <label class="field" style="margin:0;flex:0 0 70px">№<input class="obj-number" type="text" value="${o.number || ""}" /></label>
+        <label class="field" style="margin:0;flex:1">Название<input class="obj-name" type="text" value="${(o.name || "").replace(/"/g, "&quot;")}" /></label>
+        <button type="button" class="remove-object" title="Удалить объект" style="align-self:flex-end">×</button>
+      </div>
+      <div class="row2">
+        <label class="field">Рабочие от<input class="w-min" type="number" min="0" max="999" value="${o.ranges.workers.min}" /></label>
+        <label class="field">Рабочие до<input class="w-max" type="number" min="0" max="999" value="${o.ranges.workers.max}" /></label>
+        <label class="field">ИТР от<input class="i-min" type="number" min="0" max="999" value="${o.ranges.itr.min}" /></label>
+        <label class="field">ИТР до<input class="i-max" type="number" min="0" max="999" value="${o.ranges.itr.max}" /></label>
+        <label class="field">Техника от<input class="t-min" type="number" min="0" max="999" value="${o.ranges.tech.min}" /></label>
+        <label class="field">Техника до<input class="t-max" type="number" min="0" max="999" value="${o.ranges.tech.max}" /></label>
+      </div>
+      <div class="obj-nums" style="display:flex;gap:12px;font-size:13px;color:var(--mute);margin-top:6px">
+        <span>Раб. <b class="on-w">—</b></span>
+        <span>ИТР <b class="on-i">—</b></span>
+        <span>Тех. <b class="on-t">—</b></span>
+        <span>Σ <b class="on-s">—</b></span>
+      </div>
+    </div>`;
+}
+
 function createActCard(act, open = true) {
   const card = document.createElement("div");
   card.className = "act-card" + (open ? " open" : "");
   card.dataset.id = act.id;
+  const objects = (act.objects && act.objects.length) ? act.objects : [{ number: "1", name: act.name || "Объект", ranges: act.ranges || { workers:{min:13,max:15}, itr:{min:4,max:5}, tech:{min:4,max:5} } }];
   card.innerHTML = `
     <div class="act-header">
       <span class="chevron">▸</span>
-      <input class="act-name" value="${act.name.replace(/"/g, "&quot;")}" />
+      <input class="act-name" value="${(act.name || "").replace(/"/g, "&quot;")}" />
       <button type="button" class="remove-act" title="Удалить">×</button>
     </div>
     <div class="act-body">
       <label class="field">Дата фиксации
         <input class="act-date" type="date" value="${todayISO()}" />
       </label>
-      <div class="nums">
-        <div><b class="n-workers">—</b><span>рабочие</span></div>
-        <div><b class="n-itr">—</b><span>ИТР</span></div>
-        <div><b class="n-tech">—</b><span>техника</span></div>
-        <div><b class="n-sum">—</b><span>итого</span></div>
-      </div>
       <p class="hint day-status"></p>
-      <p class="hint">В акте у плана стоит звёздочка, факт без неё. Сумма считается сама. Время в бланке остаётся 10:00.</p>
-      <div class="row2">
-        <label class="field">Рабочие от<input class="w-min" type="number" min="0" max="999" value="${act.ranges.workers.min}" /></label>
-        <label class="field">Рабочие до<input class="w-max" type="number" min="0" max="999" value="${act.ranges.workers.max}" /></label>
-        <label class="field">ИТР от<input class="i-min" type="number" min="0" max="999" value="${act.ranges.itr.min}" /></label>
-        <label class="field">ИТР до<input class="i-max" type="number" min="0" max="999" value="${act.ranges.itr.max}" /></label>
-        <label class="field">Техника от<input class="t-min" type="number" min="0" max="999" value="${act.ranges.tech.min}" /></label>
-        <label class="field">Техника до<input class="t-max" type="number" min="0" max="999" value="${act.ranges.tech.max}" /></label>
-      </div>
+      <div class="objects-list"></div>
+      <button type="button" class="add-object">Добавить объект</button>
       <label class="field">Кому (адресаты этой фиксации, по одному в строке)
-        <textarea class="act-to" placeholder="name@company.ru">${(act.to || []).join("\n")}</textarea>
+        <textarea class="act-to" placeholder="name@company.ru">${(act.to || []).join("\\n")}</textarea>
       </label>
       <label class="field">Копия
-        <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\n")}</textarea>
+        <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\\n")}</textarea>
       </label>
+      <label class="field">Тема письма
+        <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&quot;")}" />
+      </label>
+      <label class="field">Текст письма
+        <textarea class="act-body-text">${act.body || "Добрый день.\\n\\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\\n\\n{objects}\\n\\nС уважением,\\nРахматуллин Ренат"}</textarea>
+      </label>
+      <p class="hint">Переменные: <code>{date}</code> <code>{name}</code> <code>{objects}</code> <code>{sum}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{filename}</code>. {objects} — список всех объектов с числами.</p>
       <div class="toolbar">
         <button type="button" class="primary act-download">Скачать PDF</button>
         <button type="button" class="act-reroll">Другие числа</button>
@@ -356,6 +418,8 @@ function createActCard(act, open = true) {
       </div>
     </div>
   `;
+  const list = card.querySelector(".objects-list");
+  objects.forEach((obj, i) => list.insertAdjacentHTML("beforeend", objectRowHtml(obj, i)));
   return card;
 }
 
@@ -378,21 +442,44 @@ function bindAct(card) {
     updateRemoveButtons();
     refreshAll();
   });
+  card.querySelector(".add-object").addEventListener("click", () => {
+    const list = card.querySelector(".objects-list");
+    const idx = list.querySelectorAll(".object-row").length;
+    list.insertAdjacentHTML("beforeend", objectRowHtml(null, idx));
+    bindObjectEvents(card);
+    refreshAct(card);
+  });
+  bindObjectEvents(card);
   card.querySelector(".act-name").addEventListener("input", () => refreshAct(card));
   card.querySelector(".act-date").addEventListener("change", () => {
     delete manuals[card.dataset.id];
     refreshAct(card);
   });
-  for (const cls of [".w-min", ".w-max", ".i-min", ".i-max", ".t-min", ".t-max"]) {
-    card.querySelector(cls).addEventListener("input", () => {
-      delete manuals[card.dataset.id];
-      refreshAct(card);
-    });
-  }
   card.querySelector(".act-download").addEventListener("click", () => download(card));
   card.querySelector(".act-reroll").addEventListener("click", () => reroll(card));
   card.querySelector(".act-lock").addEventListener("click", () => lockCurrent(card).catch((err) => msg(err.message, "bad")));
   card.querySelector(".act-send").addEventListener("click", () => dispatch(card).catch((err) => msg(err.message, "bad")));
+}
+
+function bindObjectEvents(card) {
+  for (const row of card.querySelectorAll(".object-row")) {
+    if (row.dataset.bound) continue;
+    row.dataset.bound = "1";
+    row.querySelector(".remove-object").addEventListener("click", () => {
+      if (card.querySelectorAll(".object-row").length <= 1) {
+        msg("В фиксации должен остаться хотя бы один объект.", "bad");
+        return;
+      }
+      row.remove();
+      refreshAct(card);
+    });
+    for (const inp of row.querySelectorAll("input")) {
+      inp.addEventListener("input", () => {
+        delete manuals[card.dataset.id];
+        refreshAct(card);
+      });
+    }
+  }
 }
 
 function updateRemoveButtons() {
@@ -407,9 +494,11 @@ function addAct(act = null) {
   const newAct = act || {
     id,
     name: "Фиксация " + (document.querySelectorAll(".act-card").length + 1),
-    ranges: { workers: { min: 13, max: 15 }, itr: { min: 4, max: 5 }, tech: { min: 4, max: 5 } },
+    subject: "Фиксация ТТР {date} — {name}",
+    body: "Добрый день.\n\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\n\n{objects}\n\nС уважением,\nРахматуллин Ренат",
     to: [],
     cc: [],
+    objects: [{ number: "1", name: "Объект 1", ranges: { workers: { min: 13, max: 15 }, itr: { min: 4, max: 5 }, tech: { min: 4, max: 5 } } }],
   };
   const card = createActCard(newAct, true);
   $("acts").appendChild(card);

@@ -30,26 +30,34 @@
     {
       "id": "default",
       "name": "Люблинка",
-      "ranges": {
-        "workers": {
-          "min": 13,
-          "max": 15
-        },
-        "itr": {
-          "min": 4,
-          "max": 5
-        },
-        "tech": {
-          "min": 4,
-          "max": 5
-        }
-      },
       "to": [
         "rahmatullin.rr@mis-k.ru"
       ],
       "cc": [
         "renrahman@gmail.com"
-      ]
+      ],
+      "objects": [
+        {
+          "number": "1",
+          "name": "Люблинка",
+          "ranges": {
+            "workers": {
+              "min": 13,
+              "max": 15
+            },
+            "itr": {
+              "min": 4,
+              "max": 5
+            },
+            "tech": {
+              "min": 4,
+              "max": 5
+            }
+          }
+        }
+      ],
+      "subject": "Фиксация ТТР {date} — {name}",
+      "body": "Добрый день.\\n\\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\\n\\n{objects}\\n\\nС уважением,\\nРахматуллин Ренат"
     }
   ]
 }
