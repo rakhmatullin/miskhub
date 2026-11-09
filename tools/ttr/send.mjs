@@ -46,6 +46,84 @@ const iso = /^\d{4}-\d{2}-\d{2}$/.test(dateEnv) ? dateEnv : todayISO();
 const settings = normalizeSettings(readJson(settingsPath, {}));
 let journal = ensureJournal(readJson(journalPath, {}));
 
+if (mode === "summary") {
+  const act = settings.acts.find(a => a.id === actEnv) || settings.acts[0];
+  if (!act) finish("skip: фиксация не найдена");
+  const isos = dateEnv.split(",").map(s => s.trim()).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s)).sort();
+  if (!isos.length) finish("skip: нет дат для сводки");
+
+  function getNums(iso, obj) {
+    const jact = journal.acts[act.id] || { days: {} };
+    return numbersFor(iso, obj.ranges, jact);
+  }
+
+  const objectName = act.name || "объекту";
+  const lines = [];
+  lines.push("Добрый день!");
+  lines.push("");
+  lines.push(`Численность по объекту «${objectName}»:`);
+
+  const dayData = [];
+  for (const iso of isos) {
+    const objs = (act.objects || []).map(obj => ({
+      ...obj,
+      numbers: getNums(iso, obj),
+    }));
+    const total = objs.reduce((s, o) => s + (o.numbers.sum || 0), 0);
+    dayData.push({ iso, objs, total });
+    lines.push(`${isoToRu(iso)} — ${total} человек`);
+  }
+  lines.push("");
+
+  for (const day of dayData) {
+    lines.push(isoToRu(day.iso));
+    for (const o of day.objs) {
+      const projLabel = o.number && /[0-9]{3,}-[0-9]{3,}/.test(o.number)
+        ? `Проект ${o.number}`
+        : (o.name || `Проект ${o.number || ""}`);
+      lines.push(projLabel);
+      lines.push(`Рабочие: ${o.numbers.workers}, ИТР: ${o.numbers.itr}, машинисты: ${o.numbers.tech}`);
+      lines.push("");
+    }
+  }
+
+  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  const toList = (act.to && act.to.length) ? act.to : settings.mail.to;
+  const ccList = (act.cc && act.cc.length) ? act.cc : settings.mail.cc;
+  if (!toList.length) finish("skip: нет адресатов");
+  if (!settings.mail.from) finish("skip: нет отправителя");
+  const password = process.env.TTR_MAIL_PASSWORD || "";
+  if (!password) finish("skip: нет пароля");
+
+  const from = settings.mail.fromName
+    ? `"${settings.mail.fromName.replace(/"/g, "")}" <${settings.mail.from}>`
+    : settings.mail.from;
+
+  const subject = `Численность по объекту «${objectName}» (${isos.map(isoToRu).join(", ")})`;
+
+  try {
+    const transport = nodemailer.createTransport({
+      host: settings.mail.smtpHost,
+      port: settings.mail.smtpPort,
+      secure: settings.mail.smtpPort === 465,
+      requireTLS: settings.mail.smtpPort === 587,
+      auth: { user: settings.mail.from, pass: password },
+    });
+    const info = await transport.sendMail({
+      from,
+      to: toList.join(", "),
+      cc: ccList.length ? ccList.join(", ") : undefined,
+      subject,
+      text,
+    });
+    console.log(`summary sent ${isos.join(",")} ${act.id} -> ${toList.join(", ")} id=${info.messageId || ""}`);
+  } catch (err) {
+    console.error("summary error:", err && err.message ? err.message : String(err));
+    process.exit(1);
+  }
+  finish("summary done");
+}
+
 function finish(message) {
   console.log(message);
   process.exit(0);
