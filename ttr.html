@@ -114,6 +114,29 @@
       </section>
     </div>
     <section class="panel" style="margin-top:16px">
+      <h2>Текстовая сводка</h2>
+      <p class="hint">Выбери одну или несколько дат и получи готовый текст для копирования или отправки адресатам. Формат грамотный, с полными названиями категорий.</p>
+      <label class="field">Фиксация
+        <select id="summary-act"></select>
+      </label>
+      <div class="field">Даты
+        <div id="summary-dates" class="days" style="flex-wrap:wrap; gap:6px;"></div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input id="summary-add-date" type="date" />
+          <button type="button" id="summary-add-btn">Добавить дату</button>
+        </div>
+      </div>
+      <label class="field">Текст сводки
+        <textarea id="summary-text" readonly placeholder="Нажми «Сгенерировать»" style="min-height:180px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:13px; line-height:1.45;"></textarea>
+      </label>
+      <div class="toolbar">
+        <button type="button" class="primary" id="summary-generate">Сгенерировать</button>
+        <button type="button" id="summary-copy">Скопировать текст</button>
+        <button type="button" class="primary" id="summary-send">Отправить адресатам</button>
+      </div>
+      <p class="hint" id="summary-hint">Адресаты берутся из выбранной фиксации. Отправка идёт через тот же механизм, что и обычные письма (без PDF, только текст).</p>
+    </section>
+    <section class="panel" style="margin-top:16px">
       <h2>Журнал</h2>
       <p class="hint">Что ушло и какие числа закреплены. PDF за любой день можно скачать заново — числа не переиграются.</p>
       <div class="log-wrap">
