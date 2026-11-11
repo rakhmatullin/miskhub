@@ -28,6 +28,10 @@ function stem(name) {
     .trim();
 }
 
+function compareNames(a, b) {
+  return String(a || "").localeCompare(String(b || ""), "ru", { numeric: true, sensitivity: "base" });
+}
+
 function allPages(count) {
   return Array.from({ length: count }, (_, index) => index + 1);
 }
@@ -117,6 +121,27 @@ function say(text, kind) {
   box.hidden = !text;
 }
 
+function moveSource(sourceId, index) {
+  const from = state.sources.findIndex((source) => source.id === sourceId);
+  if (from < 0) return;
+  let to = Number(index);
+  if (!Number.isFinite(to)) return;
+  if (to > from) to -= 1;
+  to = Math.max(0, Math.min(to, state.sources.length - 1));
+  if (to === from) return;
+  const [item] = state.sources.splice(from, 1);
+  state.sources.splice(to, 0, item);
+}
+
+function sourceDropIndex(zone, event) {
+  let index = Number(zone.dataset.index || 0);
+  if (zone.classList.contains("card")) {
+    const rect = zone.getBoundingClientRect();
+    if (event.clientY > rect.top + rect.height / 2) index += 1;
+  }
+  return index;
+}
+
 function segmentFrom(source) {
   return { id: uid(), sourceId: source.id, pages: allPages(source.pageCount) };
 }
@@ -196,13 +221,19 @@ function mergeInto(fromId, toId, index) {
   state.picked = null;
 }
 
-function applyPayload(payload, zone) {
+function applyPayload(payload, zone, indexOverride) {
   if (!payload || !zone) return;
   const kind = zone.dataset.drop;
   const assemblyId = zone.dataset.assembly || "";
   const edge = zone.dataset.edge || "";
-  const index = kind === "edge" ? (edge === "left" ? 0 : assemblyById(assemblyId)?.segments.length || 0) : Number(zone.dataset.index || 0);
+  const index =
+    indexOverride ??
+    (kind === "edge" ? (edge === "left" ? 0 : assemblyById(assemblyId)?.segments.length || 0) : Number(zone.dataset.index || 0));
 
+  if (kind === "source") {
+    if (payload.kind === "source") moveSource(payload.sourceId, index);
+    return;
+  }
   if (kind === "bay") {
     if (payload.kind === "source") createFromSource(payload.sourceId);
     else if (payload.kind === "segment") extractSegment(payload.assemblyId, payload.segmentId);
@@ -249,11 +280,12 @@ function render() {
   const selectionStart = active instanceof HTMLInputElement ? active.selectionStart : null;
 
   const sources = state.sources
-    .map((source) => {
+    .map((source, index) => {
       const on = samePick(state.picked, { kind: "source", sourceId: source.id });
-      return `<article class="card ${on ? "on" : ""}">
+      return `<div class="src-gap" data-drop="source" data-index="${index}"></div>
+        <article class="card ${on ? "on" : ""}" data-drop="source" data-index="${index}">
         <button type="button" class="take" data-pick="source" data-source="${source.id}">
-          <b>${escapeHtml(source.name)}</b>
+          <b class="clip" data-tip="${escapeHtml(source.name)}">${escapeHtml(source.name)}</b>
           <span>${source.pageCount} стр · ${formatBytes(source.size)}</span>
           <em>${on ? "В руке — это копия" : "Нажмите, чтобы взять"}</em>
         </button>
@@ -262,6 +294,10 @@ function render() {
       </article>`;
     })
     .join("");
+  const sourceList = state.sources.length
+    ? `<div class="source-grid">${sources}<div class="src-gap src-gap-end" data-drop="source" data-index="${state.sources.length}"></div></div>
+       <p class="hint">Новые файлы встают по алфавиту. За ⋮⋮ можно поднять или опустить.</p>`
+    : "";
 
   const assemblies = state.assemblies
     .map((assembly) => {
@@ -285,7 +321,7 @@ function render() {
           return `${index > 0 ? `<div class="seam" data-drop="seam" data-assembly="${assembly.id}" data-index="${index}" title="Склеить здесь"></div>` : ""}
             <article class="seg ${on ? "on" : ""}">
               <button type="button" class="take" data-pick="segment" data-assembly="${assembly.id}" data-segment="${segment.id}">
-                <b>${escapeHtml(source?.name || "Фрагмент")}</b>
+                <b class="clip" data-tip="${escapeHtml(source?.name || "Фрагмент")}">${escapeHtml(source?.name || "Фрагмент")}</b>
                 <span class="${kept === 0 ? "bad" : ""}">${kept} из ${total}</span>
               </button>
               <button type="button" class="grip" draggable="true" data-drag='${JSON.stringify({ kind: "segment", assemblyId: assembly.id, segmentId: segment.id })}' aria-label="Перетащить фрагмент">⋮⋮</button>
@@ -311,7 +347,7 @@ function render() {
       return `<article class="asm">
         <div class="asm-head">
           <button type="button" class="grip asm-grip" draggable="true" data-drag='${JSON.stringify({ kind: "assembly", assemblyId: assembly.id })}' aria-label="Перетащить сборку">⋮⋮</button>
-          <input class="name ${onAsm ? "on" : ""}" data-rename="${assembly.id}" value="${escapeHtml(assembly.name)}" aria-label="Имя файла" />
+          <input class="name clip ${onAsm ? "on" : ""}" data-rename="${assembly.id}" data-tip="${escapeHtml(assembly.name)}" value="${escapeHtml(assembly.name)}" aria-label="Имя файла" />
           <button type="button" class="primary" data-download="${assembly.id}" ${state.busy ? "disabled" : ""}>Скачать</button>
           <button type="button" data-remove-assembly="${assembly.id}" aria-label="Удалить сборку">×</button>
         </div>
@@ -329,7 +365,7 @@ function render() {
   const banner = picked
     ? `<div class="banner">
         <div>
-          <b>В руке: ${escapeHtml(pickedTitle())}</b>
+          <b class="clip" data-tip="${escapeHtml(pickedTitle())}">В руке: ${escapeHtml(pickedTitle())}</b>
           <p>${
             picked.kind === "assembly"
               ? "Нажмите «слева» или «справа» у другой сборки — они станут одним файлом."
@@ -353,7 +389,7 @@ function render() {
         </div>
         ${
           state.sources.length
-            ? `<div class="source-grid">${sources}</div>`
+            ? sourceList
             : `<button type="button" class="empty" id="browse-empty">Положите сюда один или несколько PDF<span>Они остаются здесь. В сборку уходит только копия.</span></button>`
         }
       </section>
@@ -388,19 +424,22 @@ async function readFiles(files) {
   state.busy = true;
   render();
   let added = 0;
+  const incoming = [];
   for (const file of pdfs) {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const doc = await PDFLib.PDFDocument.load(bytes);
       const pageCount = doc.getPageCount();
       if (pageCount < 1) throw new Error("empty");
-      state.sources.push({ id: uid(), name: file.name, bytes, pageCount, size: file.size });
+      incoming.push({ id: uid(), name: file.name, bytes, pageCount, size: file.size });
       added += 1;
     } catch (error) {
       const encrypted = String(error?.message || error).toLowerCase().includes("encrypt");
       say(`${file.name}: ${encrypted ? "PDF с паролем не открывается." : "Не удалось прочитать PDF."}`, "bad");
     }
   }
+  incoming.sort((a, b) => compareNames(a.name, b.name));
+  state.sources.push(...incoming);
   state.busy = false;
   if (added) say(added === 1 ? "Файл в источниках." : `В источниках: ${added}.`, "ok");
   render();
@@ -490,7 +529,7 @@ async function downloadAll() {
 }
 
 function clearHot() {
-  document.querySelectorAll(".hot").forEach((node) => node.classList.remove("hot"));
+  document.querySelectorAll(".hot, .hot-after").forEach((node) => node.classList.remove("hot", "hot-after"));
 }
 
 app.addEventListener("click", (event) => {
@@ -616,20 +655,32 @@ app.addEventListener("dragstart", (event) => {
   const handle = event.target instanceof Element ? event.target.closest("[data-drag]") : null;
   if (!handle) return;
   drag = JSON.parse(handle.dataset.drag);
-  event.dataTransfer.effectAllowed = drag.kind === "source" ? "copy" : "move";
+  event.dataTransfer.effectAllowed = drag.kind === "source" ? "copyMove" : "move";
   event.dataTransfer.setData("text/plain", drag.kind);
   handle.closest(".card, .seg, .asm")?.classList.add("moving");
+  if (drag.kind === "source") document.querySelector(".source-grid")?.classList.add("sorting");
+  hideTip();
 });
 
 app.addEventListener("dragend", () => {
   drag = null;
   clearHot();
+  document.querySelector(".source-grid")?.classList.remove("sorting");
   document.querySelectorAll(".moving").forEach((node) => node.classList.remove("moving"));
 });
 
 app.addEventListener("dragover", (event) => {
   const zone = event.target instanceof Element ? event.target.closest("[data-drop]") : null;
   if (!zone || !drag) return;
+  if (zone.dataset.drop === "source") {
+    if (drag.kind !== "source") return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    clearHot();
+    const after = zone.classList.contains("card") && event.clientY > zone.getBoundingClientRect().top + zone.getBoundingClientRect().height / 2;
+    zone.classList.add(after ? "hot-after" : "hot");
+    return;
+  }
   if (drag.kind === "assembly" && zone.dataset.drop === "bay") return;
   if (drag.kind === "assembly" && zone.dataset.assembly === drag.assemblyId) return;
   event.preventDefault();
@@ -643,11 +694,91 @@ app.addEventListener("drop", (event) => {
   if (!zone || !drag) return;
   event.preventDefault();
   const payload = drag;
+  const index = zone.dataset.drop === "source" ? sourceDropIndex(zone, event) : undefined;
   drag = null;
   clearHot();
-  applyPayload(payload, zone);
+  applyPayload(payload, zone, index);
   render();
 });
+
+let tipEl = null;
+let tipTimer = 0;
+
+function ensureTip() {
+  if (tipEl) return tipEl;
+  tipEl = document.createElement("div");
+  tipEl.className = "tip";
+  tipEl.hidden = true;
+  tipEl.setAttribute("role", "tooltip");
+  document.body.appendChild(tipEl);
+  return tipEl;
+}
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (tipEl) tipEl.hidden = true;
+}
+
+function showTip(text, x, y) {
+  const el = ensureTip();
+  el.textContent = text;
+  el.hidden = false;
+  el.style.left = "0px";
+  el.style.top = "0px";
+  const rect = el.getBoundingClientRect();
+  const pad = 8;
+  let left = x;
+  let top = y + 16;
+  if (left + rect.width > window.innerWidth - pad) left = window.innerWidth - rect.width - pad;
+  if (top + rect.height > window.innerHeight - pad) top = Math.max(pad, y - rect.height - 10);
+  el.style.left = `${Math.max(pad, left)}px`;
+  el.style.top = `${Math.max(pad, top)}px`;
+}
+
+function tipNode(event) {
+  const node = event.target instanceof Element ? event.target.closest("[data-tip]") : null;
+  if (!node || !node.dataset.tip) return null;
+  if (node instanceof HTMLInputElement && document.activeElement === node) return null;
+  return node;
+}
+
+app.addEventListener("pointerover", (event) => {
+  if (event.pointerType === "touch" || drag) return;
+  const node = tipNode(event);
+  if (!node) return;
+  showTip(node.dataset.tip, event.clientX, event.clientY);
+});
+
+app.addEventListener("pointermove", (event) => {
+  if (event.pointerType !== "mouse" || drag) return;
+  const node = tipNode(event);
+  if (!node) {
+    hideTip();
+    return;
+  }
+  showTip(node.dataset.tip, event.clientX, event.clientY);
+});
+
+app.addEventListener("pointerout", (event) => {
+  if (event.pointerType === "touch") return;
+  const node = event.target instanceof Element ? event.target.closest("[data-tip]") : null;
+  if (!node) return;
+  const next = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-tip]") : null;
+  if (next === node) return;
+  hideTip();
+});
+
+app.addEventListener("pointerup", (event) => {
+  if (event.pointerType !== "touch" || drag) return;
+  const raw = event.target instanceof Element ? event.target.closest("[data-tip]") : null;
+  if (!raw || !raw.dataset.tip) return;
+  if (raw instanceof HTMLInputElement && document.activeElement === raw) return;
+  showTip(raw.dataset.tip, event.clientX, event.clientY);
+  clearTimeout(tipTimer);
+  tipTimer = window.setTimeout(hideTip, 2800);
+});
+
+window.addEventListener("scroll", hideTip, true);
 
 fileInput.addEventListener("change", () => {
   const files = [...fileInput.files];

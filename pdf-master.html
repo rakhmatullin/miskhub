@@ -18,13 +18,20 @@
     .bay-head h2 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
     .bay-head span { color: var(--mute); font: 12px ui-monospace, monospace; }
     .bay-head button { margin-left: auto; }
-    .source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .source-grid { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .src-gap { height: 0; flex: none; border-radius: 6px; }
+    .source-grid.sorting { gap: 0; }
+    .source-grid.sorting .src-gap { height: 12px; margin: 3px 0; background: #122036; }
+    .source-grid.sorting .src-gap-end { height: 28px; }
+    .src-gap.hot { background: #5b9bd5; }
     .card, .seg, .asm { position: relative; background: #09111e; border: 1px solid var(--line); border-radius: 12px; }
     .card.on, .seg.on, .name.on { border-color: var(--acc); }
-    .card { padding: 10px 36px 10px 40px; min-height: 92px; }
-    .take { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; background: transparent; border: 0; color: inherit; text-align: left; padding: 0; }
-    .take b { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .take span, .take em { color: var(--mute); font-style: normal; font-size: 12px; }
+    .card { padding: 10px 40px 10px 44px; width: 100%; min-width: 0; }
+    .card.hot { box-shadow: inset 0 3px 0 #5b9bd5; }
+    .card.hot-after { box-shadow: inset 0 -3px 0 #5b9bd5; }
+    .take { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; min-width: 0; background: transparent; border: 0; color: inherit; text-align: left; padding: 0; }
+    .take b, .clip { display: block; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+    .take span, .take em { color: var(--mute); font-style: normal; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .take .bad, span.bad { color: var(--bad); }
     .grip, .x { position: absolute; top: 8px; width: 36px; height: 36px; padding: 0; }
     .grip { left: 6px; cursor: grab; }
@@ -37,17 +44,21 @@
     .new-file { min-height: 64px; margin-bottom: 10px; }
     .new-file.hot, .edge.hot, .seam.hot { background: #1c4d86; border-color: #5b9bd5; color: #fff; }
     .banner { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 1px solid #2b6cb0; background: #10233f; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+    .banner > div:first-child { min-width: 0; flex: 1; }
+    .banner .clip { font-size: 15px; font-weight: 700; }
     .banner p { margin: 4px 0 0; color: var(--mute); font-size: 12px; }
     .asm { padding: 12px; margin-bottom: 10px; }
     .asm.moving, .card.moving, .seg.moving { opacity: .45; }
     .asm-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .asm-grip { position: static; flex: none; }
-    .name { flex: 1; min-width: 0; background: #070b14; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+    .name { flex: 1; min-width: 0; background: #070b14; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tip { position: fixed; z-index: 80; max-width: min(520px, calc(100vw - 16px)); padding: 8px 10px; border-radius: 10px; background: #0e1c33; color: #fff; border: 1px solid #2b6cb0; box-shadow: 0 10px 28px rgba(0,0,0,.4); font: 13px/1.35 inherit; pointer-events: none; overflow-wrap: anywhere; }
+    .tip[hidden] { display: none; }
     .rail { display: flex; gap: 8px; align-items: stretch; }
     .rail-scroll { display: flex; gap: 8px; overflow-x: auto; min-width: 0; flex: 1; padding-bottom: 4px; }
     .edge { width: 64px; flex: none; align-self: stretch; border-style: dashed; font-size: 12px; font-weight: 700; }
     .seam { width: 18px; flex: none; align-self: stretch; border-radius: 8px; background: #122036; }
-    .seg { width: 168px; flex: none; padding: 8px 8px 8px 40px; }
+    .seg { width: 168px; min-width: 0; flex: none; padding: 8px 8px 8px 40px; }
     .seg-actions { display: flex; gap: 6px; margin-top: 8px; }
     .seg-actions button { flex: 1; padding: 8px; }
     .pages { margin-top: 8px; }
@@ -59,7 +70,7 @@
     .msg { margin: 0 0 14px; }
     .msg[hidden] { display: none; }
     @media (max-width: 900px) {
-      .bays, .source-grid { grid-template-columns: 1fr; }
+      .bays { grid-template-columns: 1fr; }
       header.top { align-items: flex-start; flex-direction: column; gap: 10px; }
       header.top nav { max-width: 100%; }
     }
@@ -92,7 +103,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a> · <a href="./ttr.html">Фиксация ТТР</a></span>
     <span>PDF Master</span>
   </footer>
-  <script src="./pdf-master.js?v=1"></script>
+  <script src="./pdf-master.js?v=2"></script>
   <script src="./hub-nav.js?v=11"></script>
 </body>
 </html>
