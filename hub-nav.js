@@ -13,7 +13,7 @@
       return path.indexOf("/" + file) !== -1;
     }
     var isIndex = /\/index\.html$|\/$/.test(location.pathname);
-    var items = isIndex ? [["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Фиксация ТТР"]] : [];
+    var items = isIndex ? [["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Фиксация ТТР"], ["pdf-master.html", "PDF Master"]] : [];
     nav.innerHTML = items.map(function (it) {
       return '<a href="./' + it[0] + '"' + (on(it[0]) ? ' class="on"' : "") + ">" + it[1] + "</a>";
     }).join("");
@@ -34,4 +34,23 @@
   ver.textContent = "версия 2.0";
   ver.style.cssText = "margin-left:auto;font-size:12px;opacity:0.7;color:#8ea0c0";
   header.appendChild(ver);
+})();
+
+(function () {
+  function ensure() {
+    var nav = document.querySelector("header nav");
+    if (!nav) return;
+    if (nav.querySelector('a[href*="pdf-master"]')) return;
+    var a = document.createElement("a");
+    a.href = "./pdf-master.html";
+    a.textContent = "PDF Master";
+    a.style.cssText = "flex:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:#9ec4ff;text-decoration:none;white-space:nowrap";
+    if (location.pathname.indexOf("pdf-master") !== -1) a.style.color = "#fff";
+    nav.appendChild(a);
+  }
+  var n = 0;
+  var t = setInterval(function () {
+    ensure();
+    if (++n > 40) clearInterval(t);
+  }, 100);
 })();

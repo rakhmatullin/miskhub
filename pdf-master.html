@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF Master — MiskHub</title>
+  <meta name="theme-color" content="#070b14" />
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6" />
+  <link rel="apple-touch-icon" href="./assets/favicon.svg?v=6" />
+  <link rel="stylesheet" href="./hub.css?v=8" />
+  <style>
+    header.top nav { display: flex; gap: 8px; overflow-x: auto; max-width: 70vw; }
+    header.top nav a { white-space: nowrap; padding: 6px 10px; border-radius: 999px; }
+    header.top nav a.on { background: #10233f; color: #fff; }
+    .bays { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+    .bay { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; min-width: 0; }
+    .bay-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .bay-head h2 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+    .bay-head span { color: var(--mute); font: 12px ui-monospace, monospace; }
+    .bay-head button { margin-left: auto; }
+    .source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card, .seg, .asm { position: relative; background: #09111e; border: 1px solid var(--line); border-radius: 12px; }
+    .card.on, .seg.on, .name.on { border-color: var(--acc); }
+    .card { padding: 10px 36px 10px 40px; min-height: 92px; }
+    .take { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; background: transparent; border: 0; color: inherit; text-align: left; padding: 0; }
+    .take b { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .take span, .take em { color: var(--mute); font-style: normal; font-size: 12px; }
+    .take .bad, span.bad { color: var(--bad); }
+    .grip, .x { position: absolute; top: 8px; width: 36px; height: 36px; padding: 0; }
+    .grip { left: 6px; cursor: grab; }
+    .x { right: 6px; }
+    .empty, .new-file {
+      width: 100%; min-height: 140px; border: 1px dashed var(--line); border-radius: 12px;
+      background: transparent; color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 16px;
+    }
+    .empty span, .hint { color: var(--mute); font-size: 12px; }
+    .new-file { min-height: 64px; margin-bottom: 10px; }
+    .new-file.hot, .edge.hot, .seam.hot { background: #1c4d86; border-color: #5b9bd5; color: #fff; }
+    .banner { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 1px solid #2b6cb0; background: #10233f; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+    .banner p { margin: 4px 0 0; color: var(--mute); font-size: 12px; }
+    .asm { padding: 12px; margin-bottom: 10px; }
+    .asm.moving, .card.moving, .seg.moving { opacity: .45; }
+    .asm-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .asm-grip { position: static; flex: none; }
+    .name { flex: 1; min-width: 0; background: #070b14; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+    .rail { display: flex; gap: 8px; align-items: stretch; }
+    .rail-scroll { display: flex; gap: 8px; overflow-x: auto; min-width: 0; flex: 1; padding-bottom: 4px; }
+    .edge { width: 64px; flex: none; align-self: stretch; border-style: dashed; font-size: 12px; font-weight: 700; }
+    .seam { width: 18px; flex: none; align-self: stretch; border-radius: 8px; background: #122036; }
+    .seg { width: 168px; flex: none; padding: 8px 8px 8px 40px; }
+    .seg-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .seg-actions button { flex: 1; padding: 8px; }
+    .pages { margin-top: 8px; }
+    .pages input { width: 100%; margin-top: 4px; background: #070b14; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }
+    .pages input.bad { border-color: var(--bad); }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .chip-page { min-width: 36px; height: 36px; padding: 0 6px; }
+    .chip-page.on { background: #1c4d86; border-color: #2b6cb0; }
+    .msg { margin: 0 0 14px; }
+    .msg[hidden] { display: none; }
+    @media (max-width: 900px) {
+      .bays, .source-grid { grid-template-columns: 1fr; }
+      header.top { align-items: flex-start; flex-direction: column; gap: 10px; }
+      header.top nav { max-width: 100%; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body data-page="pdf-master">
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html"><span>MiskHub</span></a>
+    <nav>
+      <a href="./sborka.html">Замечания</a>
+      <a href="./sverka-vesov.html">Сверка весов</a>
+      <a href="./ttr.html">Акт ТТР</a>
+      <a href="./pdf-master.html" class="on">PDF Master</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="kicker">Инструмент · PDF</p>
+      <h1>PDF Master</h1>
+      <p class="lead">Слева исходники, справа то, что скачается. Перенос или нажатие делает копию. Края слева и справа склеивают файлы в один PDF, страницы отмечаются у каждого куска.</p>
+    </section>
+    <div id="msg" class="msg" hidden></div>
+    <div id="app"></div>
+    <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden />
+  </main>
+  <footer>
+    <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a> · <a href="./ttr.html">Фиксация ТТР</a></span>
+    <span>PDF Master</span>
+  </footer>
+  <script src="./pdf-master.js?v=1"></script>
+  <script src="./hub-nav.js?v=11"></script>
+</body>
+</html>

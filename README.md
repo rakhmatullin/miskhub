@@ -8,6 +8,7 @@
 - Сборка актов: https://rakhmatullin.github.io/miskhub/sborka.html
 - Сверка весов: https://rakhmatullin.github.io/miskhub/sverka-vesov.html
 - Фиксация ТТР: https://rakhmatullin.github.io/miskhub/ttr.html
+- PDF Master: https://rakhmatullin.github.io/miskhub/pdf-master.html
 
 ## Сборка актов
 
@@ -16,3 +17,7 @@
 ## Фиксация ТТР
 
 Каждый день собирает «Фиксация технических и трудовых ресурсов»: дата сегодняшняя, план равен факту, рабочие / ИТР / машинисты берутся из диапазонов. Настройки и журнал лежат в `data/ttr`. Пароль Mail.ru в репозиторий не пишется — только секрет Actions `TTR_MAIL_PASSWORD`. Письмо отправляет workflow «Фиксация ТТР».
+
+## PDF Master
+
+Склейка PDF в браузере: исходники отдельно, готовые файлы отдельно. Страницы выбираются у каждого куска, файлы клеятся слева или справа в один PDF.
