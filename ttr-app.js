@@ -264,29 +264,92 @@ async function refreshAll() {
   renderLog();
 }
 
+function esc(s) {
+  const map = {};
+  map["&"] = "&" + "amp;";
+  map["<"] = "&" + "lt;";
+  map[">"] = "&" + "gt;";
+  map['"'] = "&" + "quot;";
+  map["'"] = "&" + "#39;";
+  return String(s ?? "").replace(/[&<>"']/g, (c) => map[c]);
+}
+
+function finiteTriple(src) {
+  if (!src) return null;
+  const workers = Math.round(Number(src.workers));
+  const itr = Math.round(Number(src.itr));
+  const tech = Math.round(Number(src.tech));
+  if (![workers, itr, tech].every(Number.isFinite)) return null;
+  return { workers, itr, tech, sum: workers + itr + tech };
+}
+
+function logLines(actId, iso, jact, card) {
+  const day = jact.days?.[iso] || {};
+  const locked = Boolean(day.locked) || day.status === "sent" || day.status === "archive" || day.status === "locked";
+  if (locked && Array.isArray(day.objects) && day.objects.length) {
+    return day.objects.map((o, i) => {
+      const t = finiteTriple(o) || { workers: 0, itr: 0, tech: 0, sum: 0 };
+      return { number: String(o.number || i + 1), name: String(o.name || "Объект"), ...t };
+    });
+  }
+  if (locked) {
+    const t = finiteTriple(day);
+    if (t) {
+      const actName = card ? card.querySelector(".act-name").value : actId;
+      return [{ number: "сводно", name: actName, ...t }];
+    }
+  }
+  const rows = card ? [...card.querySelectorAll(".object-row")] : [];
+  if (!rows.length) {
+    const n = numbersFor(iso, { workers: { min: 13, max: 15 }, itr: { min: 4, max: 5 }, tech: { min: 4, max: 5 } }, jact);
+    return [{ number: "1", name: actId, workers: n.workers, itr: n.itr, tech: n.tech, sum: n.sum }];
+  }
+  return rows.map((row) => {
+    const ranges = {
+      workers: { min: Number(row.querySelector(".w-min").value), max: Number(row.querySelector(".w-max").value) },
+      itr: { min: Number(row.querySelector(".i-min").value), max: Number(row.querySelector(".i-max").value) },
+      tech: { min: Number(row.querySelector(".t-min").value), max: Number(row.querySelector(".t-max").value) },
+    };
+    const number = row.querySelector(".obj-number").value.trim() || "1";
+    const key = actId + ":" + number;
+    let n;
+    if (manuals[key] && manuals[key].iso === iso) {
+      const m = manuals[key];
+      n = { workers: m.workers, itr: m.itr, tech: m.tech, sum: m.workers + m.itr + m.tech };
+    } else {
+      n = numbersFor(iso, ranges, jact);
+    }
+    return {
+      number,
+      name: row.querySelector(".obj-name").value.trim() || "Объект",
+      workers: n.workers,
+      itr: n.itr,
+      tech: n.tech,
+      sum: n.workers + n.itr + n.tech,
+    };
+  });
+}
+
 function renderLog() {
   const rows = [];
   const today = todayISO();
   for (const [actId, jact] of Object.entries(journal.acts || {})) {
     const keys = new Set(Object.keys(jact.days || {}));
-    for (let i = -3; i <= 4; i++) keys.add(addDays(today, i));
+    for (let i = -1; i <= 3; i++) keys.add(addDays(today, i));
+    const card = document.querySelector(`.act-card[data-id="${actId}"]`);
+    const actName = card ? card.querySelector(".act-name").value : actId;
     for (const iso of [...keys].sort().reverse()) {
-      let ranges = { workers: {min:13,max:15}, itr:{min:4,max:5}, tech:{min:4,max:5} };
-      const card = document.querySelector(`.act-card[data-id="${actId}"]`);
-      if (card) {
-        ranges = {
-          workers: { min: Number(card.querySelector(".w-min").value), max: Number(card.querySelector(".w-max").value) },
-          itr: { min: Number(card.querySelector(".i-min").value), max: Number(card.querySelector(".i-max").value) },
-          tech: { min: Number(card.querySelector(".t-min").value), max: Number(card.querySelector(".t-max").value) },
-        };
-      }
-      const n = manuals[actId] && manuals[actId].iso === iso
-        ? { ...manuals[actId], sum: manuals[actId].workers + manuals[actId].itr + manuals[actId].tech }
-        : numbersFor(iso, ranges, jact);
       const day = jact.days?.[iso] || {};
-      const label = day.status === "sent" ? "отправлен" : day.status === "archive" ? "исходный" : day.status === "error" ? "ошибка" : day.status === "locked" || n.locked ? "ждут" : iso > today ? "план" : "не отправлялся";
-      const actName = card ? card.querySelector(".act-name").value : actId;
-      rows.push(`<tr><td>${actName}</td><td><button type="button" class="act-dl" data-iso="${iso}" data-act="${actId}">${isoToRu(iso)}</button></td><td>${n.workers}</td><td>${n.itr}</td><td>${n.tech}</td><td>${n.sum}</td><td>${label}</td></tr>`);
+      const lines = logLines(actId, iso, jact, card);
+      const totals = lines.reduce(
+        (a, l) => ({ workers: a.workers + l.workers, itr: a.itr + l.itr, tech: a.tech + l.tech, sum: a.sum + l.sum }),
+        { workers: 0, itr: 0, tech: 0, sum: 0 },
+      );
+      const label = day.status === "sent" ? "отправлен" : day.status === "archive" ? "исходный" : day.status === "error" ? "ошибка" : day.locked || day.status === "locked" ? "ждут" : iso > today ? "план" : "не отправлялся";
+      rows.push(`<tr class="log-day"><td>${esc(actName)}</td><td><button type="button" class="act-dl" data-iso="${iso}" data-act="${esc(actId)}">${isoToRu(iso)}</button></td><td>${totals.workers}</td><td>${totals.itr}</td><td>${totals.tech}</td><td>${totals.sum}</td><td>${label}</td></tr>`);
+      for (const line of lines) {
+        rows.push(`<tr class="log-sub"><td colspan="2"><span class="log-num">${esc(line.number)}</span> <span class="log-name">${esc(line.name)}</span></td><td>${line.workers}</td><td>${line.itr}</td><td>${line.tech}</td><td>${line.sum}</td><td></td></tr>`);
+      }
     }
   }
   const head = "<tr><th>Фиксация</th><th>Дата</th><th>Раб.</th><th>ИТР</th><th>Тех.</th><th>Σ</th><th>Статус</th></tr>";
@@ -309,7 +372,7 @@ function objectRowHtml(obj, idx) {
     <div class="object-row" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#0a1422">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
         <label class="field" style="margin:0;flex:0 0 70px">№<input class="obj-number" type="text" value="${o.number || ""}" /></label>
-        <label class="field" style="margin:0;flex:1">Название<input class="obj-name" type="text" value="${(o.name || "").replace(/"/g, "&quot;")}" /></label>
+        <label class="field" style="margin:0;flex:1">Название<input class="obj-name" type="text" value="${(o.name || "").replace(/"/g, "&" + "quot;")}" /></label>
         <button type="button" class="remove-object" title="Удалить объект" style="align-self:flex-end">×</button>
       </div>
       <div class="row2">
@@ -337,7 +400,7 @@ function createActCard(act, open = true) {
   card.innerHTML = `
     <div class="act-header">
       <span class="chevron">▸</span>
-      <input class="act-name" value="${(act.name || "").replace(/"/g, "&quot;")}" />
+      <input class="act-name" value="${(act.name || "").replace(/"/g, "&" + "quot;")}" />
       <button type="button" class="remove-act" title="Удалить">×</button>
     </div>
     <div class="act-body">
@@ -354,7 +417,7 @@ function createActCard(act, open = true) {
         <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\n")}</textarea>
       </label>
       <label class="field">Тема письма
-        <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&quot;")}" />
+        <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&" + "quot;")}" />
       </label>
       <label class="field">Текст письма
         <textarea class="act-body-text">${act.body || "Добрый день.\\n\\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\\n\\n{objects}\\n\\nС уважением,\\nРахматуллин Ренат"}</textarea>

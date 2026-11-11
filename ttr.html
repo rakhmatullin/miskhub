@@ -49,6 +49,12 @@
     .act-card.open .chevron { transform: rotate(90deg); }
     .chevron { transition: transform 0.15s; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .ver { font-size: 14px; font-weight: 600; color: var(--mute); letter-spacing: 0; }
+    .log-day td { font-weight: 650; }
+    .log-sub td { color: var(--mute); background: #09111e; font-weight: 500; }
+    .log-sub .log-num { color: #9fd0de; font-weight: 700; white-space: nowrap; }
+    .log-name { color: var(--text); }
+
     @media (max-width: 900px) {
       .layout, .row3 { grid-template-columns: 1fr; }
       .hero h1 { font-size: 28px; }
@@ -65,7 +71,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР</h1>
+      <h1>Фиксация ТТР <span class="ver">v2.1</span></h1>
       <p class="lead">Письмо уходит текстом: дата и числа по объектам. План всегда равен факту. Можно несколько фиксаций. Утром письма сами уходят с рабочей почты.</p>
     </section>
     <div id="msg"></div>
@@ -137,7 +143,7 @@
     </section>
     <section class="panel" style="margin-top:16px">
       <h2>Журнал</h2>
-      <p class="hint">Что ушло и какие числа закреплены. Нажми дату, чтобы открыть этот день. Зафиксированные числа больше не меняются.</p>
+      <p class="hint">Под каждым днём — подстрочка объекта: шифр, название и свои рабочие, ИТР, техника. Нажми дату, чтобы открыть день.</p>
       <div class="log-wrap">
         <table class="table" id="log"></table>
       </div>
@@ -147,7 +153,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=6"></script>
-  <script src="./hub-nav.js?v=10"></script>
+  <script type="module" src="./ttr-app.js?v=7"></script>
+  <script src="./hub-nav.js?v=12"></script>
 </body>
 </html>
