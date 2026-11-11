@@ -261,6 +261,15 @@
           "messageId": "<523c59c4-3377-bc33-9cc7-d2a901168af1@mis-k.ru>",
           "error": "",
           "attempts": 1
+        },
+        "2026-11-11": {
+          "workers": 15,
+          "itr": 4,
+          "tech": 5,
+          "sum": 24,
+          "locked": true,
+          "status": "locked",
+          "error": ""
         }
       }
     }
