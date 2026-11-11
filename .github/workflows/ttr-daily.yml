@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto — по расписанию, now — отправить сейчас"
+        description: "auto — по расписанию, now — письмо сейчас, summary — текстовая сводка"
         type: string
         default: now
       date:
-        description: "Дата YYYY-MM-DD. Пусто — сегодня по Москве."
+        description: "Дата YYYY-MM-DD. Для сводки — несколько через запятую. Пусто — сегодня по Москве."
         type: string
         required: false
       act:

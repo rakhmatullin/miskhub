@@ -167,7 +167,36 @@ export function weekdayIndex(iso) {
 
 export function filenameFor(iso, name = "") {
   const base = `Фиксация ТТР ${isoToRu(iso)}`;
-  return name ? `${base} — ${name}.pdf` : `${base}.pdf`;
+  return name ? `${base} — ${name}` : base;
+}
+
+export function summaryText(act, isos, journal) {
+  const objectName = act?.name || "объекту";
+  const lines = ["Добрый день!", "", `Численность по объекту «${objectName}»:`];
+  const jact = journal?.acts?.[act?.id] || { days: {} };
+  const days = [];
+  for (const iso of [...isos].sort()) {
+    const objs = (act?.objects || []).map((obj) => ({
+      ...obj,
+      numbers: numbersFor(iso, obj.ranges, jact),
+    }));
+    const total = objs.reduce((s, o) => s + (o.numbers.sum || 0), 0);
+    days.push({ iso, objs, total });
+    lines.push(`${isoToRu(iso)} — ${total} человек`);
+  }
+  lines.push("");
+  for (const day of days) {
+    lines.push(isoToRu(day.iso));
+    for (const o of day.objs) {
+      const projLabel = o.number && /[0-9]{3,}-[0-9]{3,}/.test(o.number)
+        ? `Проект ${o.number}`
+        : (o.name || `Проект ${o.number || ""}`);
+      lines.push(projLabel);
+      lines.push(`Рабочие: ${o.numbers.workers}, ИТР: ${o.numbers.itr}, машинисты: ${o.numbers.tech}`);
+      lines.push("");
+    }
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
 
 export function fill(template, ctx) {
@@ -208,14 +237,21 @@ function nudge(n, ranges, iso) {
   return n;
 }
 
+function lockedTriple(src) {
+  const workers = Math.round(Number(src?.workers));
+  const itr = Math.round(Number(src?.itr));
+  const tech = Math.round(Number(src?.tech));
+  if (![workers, itr, tech].every(Number.isFinite)) return null;
+  return { workers, itr, tech };
+}
+
 function lockedOf(journalAct, iso) {
   const day = journalAct?.days?.[iso];
   if (!day || !day.locked) return null;
-  const workers = Math.round(Number(day.workers));
-  const itr = Math.round(Number(day.itr));
-  const tech = Math.round(Number(day.tech));
-  if (![workers, itr, tech].every(Number.isFinite)) return null;
-  return { workers, itr, tech, sum: workers + itr + tech, status: day.status || "locked", note: day.note || "" };
+  let triple = lockedTriple(day);
+  if (!triple && Array.isArray(day.objects) && day.objects.length === 1) triple = lockedTriple(day.objects[0]);
+  if (!triple) return null;
+  return { ...triple, sum: triple.workers + triple.itr + triple.tech, status: day.status || "locked", note: day.note || "" };
 }
 
 export function numbersFor(iso, ranges, journalAct) {

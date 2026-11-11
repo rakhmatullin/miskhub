@@ -1,13 +1,12 @@
 import {
   addDays,
   ensureJournal,
-  filenameFor,
   isoToRu,
   normalizeSettings,
   numbersFor,
+  summaryText,
   todayISO,
 } from "./ttr-core.js";
-import { createMakePdf } from "./ttr-pdf.js";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -22,14 +21,9 @@ const WEEK = [
 ];
 
 const $ = (id) => document.getElementById(id);
-const makePdf = createMakePdf(globalThis.PDFLib, globalThis.fontkit);
-
 let saved = null;
 let journal = { acts: {} };
 let manuals = {};
-let templateBytes = null;
-let fontBytes = null;
-let pdfUrls = {};
 let secretKnown = null;
 
 function token() {
@@ -213,35 +207,6 @@ function statusText(day, numbers, iso) {
   return "Дата зафиксирована.";
 }
 
-async function paint(card, bytes) {
-  const canvas = card.querySelector(".act-canvas");
-  const frame = card.querySelector(".act-frame");
-  const id = card.dataset.id;
-  if (pdfUrls[id]) URL.revokeObjectURL(pdfUrls[id]);
-  pdfUrls[id] = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  try {
-    const pdfjs = await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.min.mjs");
-    pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs";
-    const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
-    const page = await doc.getPage(1);
-    const base = page.getViewport({ scale: 1 });
-    const width = canvas.parentElement.clientWidth || 320;
-    const viewport = page.getViewport({ scale: Math.min(1.7, width / base.width) });
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    canvas.hidden = false;
-    if (frame) frame.hidden = true;
-  } catch (err) {
-    console.warn(err);
-    canvas.hidden = true;
-    if (frame) {
-      frame.hidden = false;
-      frame.src = pdfUrls[id];
-    }
-  }
-}
-
 function objectsFor(card) {
   const id = card.dataset.id;
   const iso = actDate(card);
@@ -285,21 +250,11 @@ async function refreshAct(card) {
     totalI += o.numbers.itr;
     totalT += o.numbers.tech;
   }
-  const name = card.querySelector(".act-name").value.trim();
-  card.querySelector(".fname").textContent = filenameFor(iso, name) + (objs.length > 1 ? ` (+${objs.length - 1} объектов)` : "");
   const jact = journal.acts?.[id] || { days: {} };
   const day = jact.days?.[iso];
   const first = objs[0]?.numbers || { workers: 0, itr: 0, tech: 0, sum: 0, locked: false };
-  card.querySelector(".day-status").textContent = statusText({ ...day, id }, first, iso) + (objs.length > 1 ? ` · ${objs.length} объектов` : "");
-  if (!templateBytes || !fontBytes || !objs.length) return;
-  // Preview first object
-  const bytes = await makePdf(templateBytes, fontBytes, {
-    dateLabel: "Дата: " + isoToRu(iso),
-    workers: objs[0].numbers.workers,
-    itr: objs[0].numbers.itr,
-    tech: objs[0].numbers.tech,
-  });
-  await paint(card, bytes);
+  const extra = objs.length > 1 ? ` · ${objs.length} объектов` : "";
+  card.querySelector(".day-status").textContent = statusText({ ...day, id }, first, iso) + extra;
 }
 
 async function refreshAll() {
@@ -393,10 +348,10 @@ function createActCard(act, open = true) {
       <div class="objects-list"></div>
       <button type="button" class="add-object">Добавить объект</button>
       <label class="field">Кому (адресаты этой фиксации, по одному в строке)
-        <textarea class="act-to" placeholder="name@company.ru">${(act.to || []).join("\\n")}</textarea>
+        <textarea class="act-to" placeholder="name@company.ru">${(act.to || []).join("\n")}</textarea>
       </label>
       <label class="field">Копия
-        <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\\n")}</textarea>
+        <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\n")}</textarea>
       </label>
       <label class="field">Тема письма
         <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&quot;")}" />
@@ -406,20 +361,18 @@ function createActCard(act, open = true) {
       </label>
       <p class="hint">Переменные: <code>{date}</code> <code>{name}</code> <code>{objects}</code> <code>{sum}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{filename}</code>. {objects} — список всех объектов с числами.</p>
       <div class="toolbar">
-        <button type="button" class="primary act-download">Скачать PDF</button>
         <button type="button" class="act-reroll">Другие числа</button>
         <button type="button" class="act-lock">Зафиксировать</button>
         <button type="button" class="primary act-send">Отправить сейчас</button>
       </div>
-      <p class="hint fname"></p>
-      <div class="sheet-wrap">
-        <canvas class="act-canvas"></canvas>
-        <iframe class="act-frame" title="Предпросмотр" hidden></iframe>
-      </div>
+      <p class="hint">Письмо уходит текстом, без PDF. Числа выше попадут в письмо.</p>
     </div>
   `;
   const list = card.querySelector(".objects-list");
   objects.forEach((obj, i) => list.insertAdjacentHTML("beforeend", objectRowHtml(obj, i)));
+  card.querySelector(".act-body-text").value = String(act.body || "Добрый день.\n\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\n\n{objects}\n\nС уважением,\nРахматуллин Ренат").replace(/\\n/g, "\n");
+  card.querySelector(".act-to").value = (act.to || []).join("\n");
+  card.querySelector(".act-cc").value = (act.cc || []).join("\n");
   return card;
 }
 
@@ -440,6 +393,7 @@ function bindAct(card) {
     delete manuals[id];
     card.remove();
     updateRemoveButtons();
+    syncSummaryActOptions();
     refreshAll();
   });
   card.querySelector(".add-object").addEventListener("click", () => {
@@ -450,12 +404,11 @@ function bindAct(card) {
     refreshAct(card);
   });
   bindObjectEvents(card);
-  card.querySelector(".act-name").addEventListener("input", () => refreshAct(card));
+  card.querySelector(".act-name").addEventListener("input", () => { syncSummaryActOptions(); refreshAct(card); });
   card.querySelector(".act-date").addEventListener("change", () => {
     delete manuals[card.dataset.id];
     refreshAct(card);
   });
-  card.querySelector(".act-download").addEventListener("click", () => download(card));
   card.querySelector(".act-reroll").addEventListener("click", () => reroll(card));
   card.querySelector(".act-lock").addEventListener("click", () => lockCurrent(card).catch((err) => msg(err.message, "bad")));
   card.querySelector(".act-send").addEventListener("click", () => dispatch(card).catch((err) => msg(err.message, "bad")));
@@ -504,6 +457,7 @@ function addAct(act = null) {
   $("acts").appendChild(card);
   bindAct(card);
   updateRemoveButtons();
+  syncSummaryActOptions();
   refreshAct(card);
   return card;
 }
@@ -647,6 +601,125 @@ async function pollJournal(actId, iso) {
   }
 }
 
+const summaryDates = new Set([todayISO()]);
+
+function syncSummaryActOptions() {
+  const sel = $("summary-act");
+  if (!sel) return false;
+  const prev = sel.value;
+  const cards = [...document.querySelectorAll(".act-card")];
+  sel.replaceChildren();
+  for (const card of cards) {
+    const opt = document.createElement("option");
+    opt.value = card.dataset.id;
+    opt.textContent = card.querySelector(".act-name").value.trim() || "Фиксация";
+    sel.appendChild(opt);
+  }
+  sel.disabled = cards.length === 0;
+  const still = cards.some((card) => card.dataset.id === prev);
+  if (still) sel.value = prev;
+  return still || cards.length === 0;
+}
+
+function renderSummaryDates() {
+  const box = $("summary-dates");
+  if (!box) return;
+  if (!summaryDates.size) summaryDates.add(todayISO());
+  box.replaceChildren();
+  for (const iso of [...summaryDates].sort()) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "on";
+    btn.dataset.date = iso;
+    btn.textContent = isoToRu(iso);
+    btn.title = "Убрать дату";
+    box.appendChild(btn);
+  }
+}
+
+function summaryIsoList() {
+  const list = [...summaryDates].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  return list.length ? list : [todayISO()];
+}
+
+function fillSummary() {
+  const area = $("summary-text");
+  if (!area) return;
+  const settings = readForm();
+  const id = $("summary-act").value;
+  const act = settings.acts.find((a) => a.id === id) || settings.acts[0];
+  area.value = act ? summaryText(act, summaryIsoList(), journal) : "";
+}
+
+function bindSummary() {
+  const dateInput = $("summary-add-date");
+  if (dateInput && !dateInput.value) dateInput.value = todayISO();
+  renderSummaryDates();
+  syncSummaryActOptions();
+  fillSummary();
+  $("summary-act").addEventListener("change", fillSummary);
+  $("summary-add-btn").addEventListener("click", () => {
+    const value = $("summary-add-date").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) {
+      msg("Выбери дату для сводки.", "bad");
+      return;
+    }
+    summaryDates.add(value);
+    renderSummaryDates();
+    fillSummary();
+  });
+  $("summary-dates").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-date]");
+    if (!btn) return;
+    summaryDates.delete(btn.dataset.date);
+    if (!summaryDates.size) summaryDates.add(todayISO());
+    renderSummaryDates();
+    fillSummary();
+  });
+  $("summary-generate").addEventListener("click", () => {
+    fillSummary();
+    msg("Сводка собрана.", "ok");
+  });
+  $("summary-copy").addEventListener("click", async () => {
+    fillSummary();
+    const text = $("summary-text").value;
+    try {
+      await navigator.clipboard.writeText(text);
+      msg("Текст сводки скопирован.", "ok");
+    } catch {
+      $("summary-text").focus();
+      $("summary-text").select();
+      msg("Выделил текст — скопируй его вручную.", "info");
+    }
+  });
+  $("summary-send").addEventListener("click", () => sendSummary().catch((err) => msg(err.message, "bad")));
+}
+
+async function sendSummary() {
+  if (!token()) {
+    msg("Чтобы отправить сводку, запомни токен GitHub.", "bad");
+    return;
+  }
+  syncSummaryActOptions();
+  const actId = $("summary-act").value;
+  if (!actId) {
+    msg("Выбери фиксацию.", "bad");
+    return;
+  }
+  const isos = summaryIsoList();
+  fillSummary();
+  if (dirty()) {
+    const ok = await saveSettings();
+    if (!ok) return;
+  }
+  msg("Ставлю сводку в очередь…", "info");
+  await gh("POST", `/repos/${REPO}/actions/workflows/ttr-daily.yml/dispatches`, {
+    ref: "main",
+    inputs: { mode: "summary", date: isos.join(","), act: actId },
+  });
+  msg("Сводка за " + isos.map(isoToRu).join(", ") + " поставлена в очередь. Письмо уйдёт текстом, без PDF.", "ok");
+}
+
 async function checkSecret() {
   if (!token()) {
     secretKnown = null;
@@ -669,17 +742,6 @@ async function checkSecret() {
   }
 }
 
-function download(card) {
-  const id = card.dataset.id;
-  const url = pdfUrls[id];
-  if (!url) return;
-  const link = document.createElement("a");
-  link.href = url;
-  const name = card.querySelector(".act-name").value.trim();
-  link.download = filenameFor(actDate(card), name);
-  link.click();
-}
-
 async function init() {
   buildDays();
   $("token").value = token();
@@ -687,12 +749,9 @@ async function init() {
   saved = normalizeSettings(rawSettings);
   journal = ensureJournal(await loadJson("data/ttr/journal.json"));
   writeMail(saved);
-  for (const act of saved.acts) {
-    addAct(act);
-  }
+  for (const act of saved.acts) addAct(act);
   if (!saved.acts.length) addAct();
-  templateBytes = await loadAsset("data/ttr/template.pdf");
-  fontBytes = await loadAsset("data/ttr/LiberationSerif-Regular.ttf");
+  bindSummary();
   await checkSecret();
   await refreshAll();
 

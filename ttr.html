@@ -22,6 +22,7 @@
       width: 100%; background: #09111e; color: var(--text); border: 1px solid var(--line);
       border-radius: 10px; padding: 12px; font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
     }
+    .field select { min-height: 48px; }
     textarea { min-height: 140px; resize: vertical; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -55,8 +56,6 @@
       .nums b { font-size: 22px; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
 </head>
 <body data-page="ttr">
   <div class="bg"></div>
@@ -65,9 +64,9 @@
   </header>
   <main>
     <section class="hero">
-      <p class="kicker">Каждый день · бланк УДМС · почта Mail.ru</p>
+      <p class="kicker">Каждый день · текст · почта Mail.ru</p>
       <h1>Фиксация ТТР</h1>
-      <p class="lead">Бланк тот же: шапка, объект, подписи. Меняются дата и три числа. План всегда равен факту. Можно несколько фиксаций. Утром файлы сами уходят с рабочей почты.</p>
+      <p class="lead">Письмо уходит текстом: дата и числа по объектам. План всегда равен факту. Можно несколько фиксаций. Утром письма сами уходят с рабочей почты.</p>
     </section>
     <div id="msg"></div>
     <div class="layout">
@@ -138,7 +137,7 @@
     </section>
     <section class="panel" style="margin-top:16px">
       <h2>Журнал</h2>
-      <p class="hint">Что ушло и какие числа закреплены. PDF за любой день можно скачать заново — числа не переиграются.</p>
+      <p class="hint">Что ушло и какие числа закреплены. Нажми дату, чтобы открыть этот день. Зафиксированные числа больше не меняются.</p>
       <div class="log-wrap">
         <table class="table" id="log"></table>
       </div>
@@ -148,7 +147,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=5"></script>
+  <script type="module" src="./ttr-app.js?v=6"></script>
   <script src="./hub-nav.js?v=10"></script>
 </body>
 </html>
