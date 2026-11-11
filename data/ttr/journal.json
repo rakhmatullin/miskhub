@@ -263,13 +263,36 @@
           "attempts": 1
         },
         "2026-11-11": {
+          "objects": [
+            {
+              "number": "1",
+              "name": "Люблинка",
+              "workers": 15,
+              "itr": 4,
+              "tech": 5,
+              "sum": 24,
+              "status": "locked",
+              "note": "",
+              "locked": true
+            }
+          ],
           "workers": 15,
           "itr": 4,
           "tech": 5,
           "sum": 24,
           "locked": true,
-          "status": "locked",
-          "error": ""
+          "status": "sent",
+          "sentAt": "2026-11-11T13:22:33.059Z",
+          "to": [
+            "rahmatullin.rr@mis-k.ru"
+          ],
+          "cc": [
+            "renrahman@gmail.com"
+          ],
+          "filename": "Фиксация ТТР 11.11.2026 — Люблинка",
+          "messageId": "<a181a1f6-ec9e-e4f2-8126-5ea83f3dfe20@mis-k.ru>",
+          "error": "",
+          "attempts": 1
         }
       }
     }
