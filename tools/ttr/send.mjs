@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
 import {
+  dayBreakdown,
   ensureJournal,
   filenameFor,
   fill,
@@ -10,7 +11,7 @@ import {
   minutesOf,
   moscowMinutesNow,
   normalizeSettings,
-  numbersFor,
+  objectsLetterBlock,
   summaryText,
   todayISO,
   weekdayIndex,
@@ -101,29 +102,53 @@ if (mode === "summary") {
   finish("summary done");
 }
 
+if (mode === "letter") {
+  const box = readJson(path.join(root, "data/ttr/outbox.json"), null);
+  const text = plainText(box?.text || "").trim();
+  const toList = Array.isArray(box?.to) ? box.to.map((s) => String(s).trim()).filter(Boolean) : [];
+  const ccList = Array.isArray(box?.cc) ? box.cc.map((s) => String(s).trim()).filter(Boolean) : [];
+  if (!text) finish("skip: нет текста письма");
+  if (!toList.length) finish("skip: нет адресатов");
+  if (!settings.mail.from) finish("skip: нет отправителя");
+  const password = process.env.TTR_MAIL_PASSWORD || "";
+  if (!password && !dry) finish("skip: нет пароля");
+  const from = settings.mail.fromName
+    ? `"${settings.mail.fromName.replace(/"/g, "")}" <${settings.mail.from}>`
+    : settings.mail.from;
+  const subject = String(box.subject || "Численность").trim();
+  if (dry) {
+    console.log(JSON.stringify({ mode: "letter", subject, to: toList, cc: ccList, text }));
+    finish("letter dry");
+  }
+  try {
+    const transport = nodemailer.createTransport({
+      host: settings.mail.smtpHost,
+      port: settings.mail.smtpPort,
+      secure: settings.mail.smtpPort === 465,
+      requireTLS: settings.mail.smtpPort === 587,
+      auth: { user: settings.mail.from, pass: password },
+    });
+    const info = await transport.sendMail({
+      from,
+      to: toList.join(", "),
+      cc: ccList.length ? ccList.join(", ") : undefined,
+      subject,
+      text,
+    });
+    console.log(`letter sent -> ${toList.join(", ")} id=${info.messageId || ""}`);
+  } catch (err) {
+    console.error("letter error:", err && err.message ? err.message : String(err));
+    process.exit(1);
+  }
+  finish("letter done");
+}
+
 async function sendOne(act, dayIso) {
   const jact = (journal.acts[act.id] ||= { days: {} });
   const day = jact.days[dayIso] || {};
-  const objects = act.objects || [{ number: "1", name: act.name, ranges: act.ranges || {} }];
-  const objResults = objects.map((obj) => ({
-    ...obj,
-    numbers: numbersFor(dayIso, obj.ranges, jact),
-  }));
-  const total = objResults.reduce(
-    (a, o) => ({
-      workers: a.workers + o.numbers.workers,
-      itr: a.itr + o.numbers.itr,
-      tech: a.tech + o.numbers.tech,
-      sum: a.sum + o.numbers.sum,
-    }),
-    { workers: 0, itr: 0, tech: 0, sum: 0 },
-  );
-  const objectsText = objResults
-    .map(
-      (o) =>
-        `${o.number}. ${o.name}: рабочие — ${o.numbers.workers}, ИТР — ${o.numbers.itr}, техника — ${o.numbers.tech} (итого ${o.numbers.sum})`,
-    )
-    .join("\n");
+  const breakdown = dayBreakdown(act, dayIso, journal);
+  const total = breakdown.totals;
+  const objectsText = objectsLetterBlock(breakdown.lines, total);
   const ctx = {
     date: isoToRu(dayIso),
     name: act.name,
@@ -205,7 +230,17 @@ async function sendOne(act, dayIso) {
       text,
     });
     jact.days[dayIso] = {
-      objects: objResults.map((o) => ({ number: o.number, name: o.name, ...o.numbers })),
+      objects: breakdown.lines.map((o) => ({
+        number: o.number,
+        name: o.name,
+        workers: o.workers,
+        itr: o.itr,
+        tech: o.tech,
+        sum: o.sum,
+        locked: true,
+        status: "sent",
+        note: "",
+      })),
       workers: total.workers,
       itr: total.itr,
       tech: total.tech,

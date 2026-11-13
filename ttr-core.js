@@ -160,6 +160,14 @@ export function isoToRu(iso) {
   return `${d}.${m}.${y}`;
 }
 
+export function peoplePhrase(n) {
+  const abs = Math.abs(Math.round(Number(n) || 0));
+  const n10 = abs % 10;
+  const n100 = abs % 100;
+  const word = n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? "человека" : "человек";
+  return `${abs} ${word}`;
+}
+
 export function weekdayIndex(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
@@ -170,33 +178,159 @@ export function filenameFor(iso, name = "") {
   return name ? `${base} — ${name}` : base;
 }
 
-export function summaryText(act, isos, journal) {
-  const objectName = act?.name || "объекту";
-  const lines = ["Добрый день!", "", `Численность по объекту «${objectName}»:`];
-  const jact = journal?.acts?.[act?.id] || { days: {} };
-  const days = [];
-  for (const iso of [...isos].sort()) {
-    const objs = (act?.objects || []).map((obj) => ({
-      ...obj,
-      numbers: numbersFor(iso, obj.ranges, jact),
-    }));
-    const total = objs.reduce((s, o) => s + (o.numbers.sum || 0), 0);
-    days.push({ iso, objs, total });
-    lines.push(`${isoToRu(iso)} — ${total} человек`);
+function sumParts(lines) {
+  return (lines || []).reduce(
+    (a, l) => ({
+      workers: a.workers + (Number(l.workers) || 0),
+      itr: a.itr + (Number(l.itr) || 0),
+      tech: a.tech + (Number(l.tech) || 0),
+      sum: a.sum + (Number(l.sum) || 0),
+    }),
+    { workers: 0, itr: 0, tech: 0, sum: 0 },
+  );
+}
+
+function actSlice(journal, act) {
+  if (!journal || typeof journal !== "object") return { days: {} };
+  if (journal.acts && act?.id && journal.acts[act.id]) return journal.acts[act.id];
+  if (journal.days) return journal;
+  return { days: {} };
+}
+
+export function dayBreakdown(act, iso, journal) {
+  const jact = actSlice(journal, act);
+  const day = jact.days?.[iso] || {};
+  const locked = Boolean(day.locked) || day.status === "sent" || day.status === "archive" || day.status === "locked";
+  const spec = Array.isArray(act?.objects) && act.objects.length
+    ? act.objects
+    : [{ number: "1", name: act?.name || "Объект", ranges: {} }];
+
+  if (locked && Array.isArray(day.objects) && day.objects.length) {
+    const lines = day.objects.map((o, i) => {
+      const t = lockedTriple(o) || { workers: 0, itr: 0, tech: 0 };
+      const sum = t.workers + t.itr + t.tech;
+      return {
+        number: String(o.number ?? i + 1),
+        name: String(o.name || "Объект"),
+        workers: t.workers,
+        itr: t.itr,
+        tech: t.tech,
+        sum,
+      };
+    });
+    return { iso, lines, totals: sumParts(lines), locked: true };
   }
-  lines.push("");
-  for (const day of days) {
-    lines.push(isoToRu(day.iso));
-    for (const o of day.objs) {
-      const projLabel = o.number && /[0-9]{3,}-[0-9]{3,}/.test(o.number)
-        ? `Проект ${o.number}`
-        : (o.name || `Проект ${o.number || ""}`);
-      lines.push(projLabel);
-      lines.push(`Рабочие: ${o.numbers.workers}, ИТР: ${o.numbers.itr}, машинисты: ${o.numbers.tech}`);
-      lines.push("");
+
+  if (locked) {
+    const t = lockedTriple(day);
+    if (t) {
+      const sum = t.workers + t.itr + t.tech;
+      const only = spec.length === 1 ? spec[0] : null;
+      return {
+        iso,
+        lines: [{
+          number: only ? String(only.number || "") : "",
+          name: only ? String(only.name || act?.name || "Объект") : String(act?.name || "Сводно"),
+          workers: t.workers,
+          itr: t.itr,
+          tech: t.tech,
+          sum,
+        }],
+        totals: { workers: t.workers, itr: t.itr, tech: t.tech, sum },
+        locked: true,
+      };
     }
   }
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+
+  const lines = spec.map((obj, i) => {
+    const ref = String(obj.number || i + 1);
+    const ranges = obj.ranges || { workers: { min: 0, max: 0 }, itr: { min: 0, max: 0 }, tech: { min: 0, max: 0 } };
+    const n = numbersFor(iso, ranges, jact, ref);
+    const sum = n.workers + n.itr + n.tech;
+    return { number: ref, name: String(obj.name || "Объект"), workers: n.workers, itr: n.itr, tech: n.tech, sum };
+  });
+  return { iso, lines, totals: sumParts(lines), locked: false };
+}
+
+export function objectsLetterBlock(lines, totals) {
+  const chunks = (lines || []).map((o) => {
+    const head = [o.number, o.name].filter(Boolean).join(". ");
+    return `${head}: рабочие — ${o.workers}, ИТР — ${o.itr}, машинисты — ${o.tech}. Итого ${peoplePhrase(o.sum)}.`;
+  });
+  const t = totals || sumParts(lines || []);
+  chunks.push(`Суммарно за день: рабочие — ${t.workers}, ИТР — ${t.itr}, машинисты — ${t.tech}. Всего ${peoplePhrase(t.sum)}.`);
+  return chunks.join("\n");
+}
+
+function objectDetailBlock(o) {
+  const head = [o.number, o.name].filter(Boolean).join(". ");
+  return `${head}\nРабочие: ${o.workers}, ИТР: ${o.itr}, машинисты: ${o.tech}. Итого ${peoplePhrase(o.sum)}.`;
+}
+
+export function composeLetter({ acts, isos, journal, shape = "detail", signName = "Рахматуллин Ренат" } = {}) {
+  const list = (Array.isArray(acts) ? acts : []).filter(Boolean);
+  const dates = [...new Set((isos || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  const days = [];
+  for (const act of list) {
+    for (const iso of dates) days.push({ act, ...dayBreakdown(act, iso, journal) });
+  }
+  const grand = days.reduce((s, d) => s + (d.totals?.sum || 0), 0);
+  const names = list.map((a) => a.name).filter(Boolean);
+  const dateLabel = dates.length === 1
+    ? isoToRu(dates[0])
+    : dates.length > 1
+      ? `${isoToRu(dates[0])}–${isoToRu(dates[dates.length - 1])}`
+      : "";
+  const subject = `Численность${dateLabel ? " " + dateLabel : ""}${names.length ? " — " + names.join(", ") : ""}`;
+  const lines = ["Добрый день!", ""];
+  if (!list.length || !dates.length) {
+    lines.push("Нет данных для письма.");
+  } else if (shape === "short") {
+    lines.push(list.length === 1 ? `Численность по «${list[0].name || "объекту"}».` : "Численность.", "");
+    let lastAct = null;
+    for (const day of days) {
+      if (list.length > 1 && day.act !== lastAct) {
+        if (lastAct) lines.push("");
+        lines.push(day.act.name || "Фиксация");
+        lastAct = day.act;
+      }
+      lines.push(`${isoToRu(day.iso)} — ${peoplePhrase(day.totals.sum)}`);
+    }
+  } else {
+    let started = false;
+    let lastAct = null;
+    for (const day of days) {
+      if (list.length > 1 && day.act !== lastAct) {
+        lines.push(day.act.name || "Фиксация", "");
+        lastAct = day.act;
+      } else if (list.length === 1 && !started) {
+        lines.push(`Численность по «${list[0].name || "объекту"}».`, "");
+      }
+      started = true;
+      lines.push(`${isoToRu(day.iso)} — суммарно ${peoplePhrase(day.totals.sum)}`);
+      for (const o of day.lines) lines.push(objectDetailBlock(o), "");
+    }
+  }
+  if (dates.length > 1 || list.length > 1) lines.push("", `Суммарно за выбранные даты: ${peoplePhrase(grand)}.`);
+  lines.push("", "С уважением,", signName || "Рахматуллин Ренат");
+  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  return {
+    subject,
+    text,
+    grand,
+    days: days.map((d) => ({
+      actId: d.act?.id || "",
+      actName: d.act?.name || "",
+      iso: d.iso,
+      people: d.totals.sum,
+      totals: d.totals,
+      lines: d.lines,
+    })),
+  };
+}
+
+export function summaryText(act, isos, journal) {
+  return composeLetter({ acts: act ? [act] : [], isos, journal, shape: "detail" }).text;
 }
 
 export function fill(template, ctx) {
@@ -254,9 +388,37 @@ function lockedOf(journalAct, iso) {
   return { ...triple, sum: triple.workers + triple.itr + triple.tech, status: day.status || "locked", note: day.note || "" };
 }
 
-export function numbersFor(iso, ranges, journalAct) {
-  const locked = lockedOf(journalAct, iso);
-  if (locked) return { ...locked, locked: true };
+export function numbersFor(iso, ranges, journalAct, objectRef) {
+  const ref = objectRef == null ? "" : String(objectRef);
+  if (ref) {
+    const day = journalAct?.days?.[iso];
+    if (day && Array.isArray(day.objects) && day.objects.length) {
+      const hit = day.objects.find((o) => String(o.number) === ref);
+      const triple = hit ? lockedTriple(hit) : null;
+      const dayLocked = Boolean(day.locked) || day.status === "sent" || day.status === "archive" || day.status === "locked" || Boolean(hit?.locked);
+      if (triple && dayLocked) {
+        return {
+          workers: triple.workers,
+          itr: triple.itr,
+          tech: triple.tech,
+          sum: triple.workers + triple.itr + triple.tech,
+          locked: true,
+          status: day.status || "locked",
+          note: day.note || "",
+        };
+      }
+      if (!dayLocked) {
+        const locked = lockedOf(journalAct, iso);
+        if (locked) return { ...locked, locked: true };
+      }
+    } else {
+      const locked = lockedOf(journalAct, iso);
+      if (locked) return { ...locked, locked: true };
+    }
+  } else {
+    const locked = lockedOf(journalAct, iso);
+    if (locked) return { ...locked, locked: true };
+  }
   let n = rollDay(iso, ranges);
   const prevIso = addDays(iso, -1);
   const prev = lockedOf(journalAct, prevIso) || rollDay(prevIso, ranges);

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto — по расписанию, now — письмо сейчас, summary — текстовая сводка"
+        description: "auto — по расписанию, now — письмо сейчас, summary — сводка, letter — черновик из data/ttr/outbox.json"
         type: string
         default: now
       date:

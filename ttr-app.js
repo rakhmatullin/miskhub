@@ -1,12 +1,18 @@
 import {
   addDays,
+  composeLetter,
   ensureJournal,
+  filenameFor,
+  fill,
   isoToRu,
   normalizeSettings,
   numbersFor,
-  summaryText,
+  objectsLetterBlock,
+  parseList,
+  peoplePhrase,
   todayISO,
-} from "./ttr-core.js";
+  weekdayIndex,
+} from "./ttr-core.js?v=8";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -217,17 +223,18 @@ function objectsFor(card) {
       itr: { min: Number(row.querySelector(".i-min").value), max: Number(row.querySelector(".i-max").value) },
       tech: { min: Number(row.querySelector(".t-min").value), max: Number(row.querySelector(".t-max").value) },
     };
-    const key = id + ":" + (row.querySelector(".obj-number").value || "1");
+    const number = row.querySelector(".obj-number").value.trim() || "1";
+    const key = id + ":" + number;
     let numbers;
     if (manuals[key] && manuals[key].iso === iso) {
       const m = manuals[key];
       numbers = { ...m, sum: m.workers + m.itr + m.tech, locked: false };
     } else {
       const jact = journal.acts?.[id] || { days: {} };
-      numbers = numbersFor(iso, ranges, jact);
+      numbers = numbersFor(iso, ranges, jact, number);
     }
     return {
-      number: row.querySelector(".obj-number").value.trim() || "1",
+      number,
       name: row.querySelector(".obj-name").value.trim() || "Объект",
       ranges,
       numbers,
@@ -254,7 +261,34 @@ async function refreshAct(card) {
   const day = jact.days?.[iso];
   const first = objs[0]?.numbers || { workers: 0, itr: 0, tech: 0, sum: 0, locked: false };
   const extra = objs.length > 1 ? ` · ${objs.length} объектов` : "";
-  card.querySelector(".day-status").textContent = statusText({ ...day, id }, first, iso) + extra;
+  const people = peoplePhrase(totalW + totalI + totalT);
+  card.querySelector(".day-status").textContent = statusText({ ...day, id }, first, iso) + extra + " · суммарно " + people;
+  const preview = card.querySelector(".letter-preview");
+  if (preview) {
+    const lines = objs.map((o) => ({
+      number: o.number,
+      name: o.name,
+      workers: o.numbers.workers,
+      itr: o.numbers.itr,
+      tech: o.numbers.tech,
+      sum: o.numbers.sum,
+    }));
+    const totals = { workers: totalW, itr: totalI, tech: totalT, sum: totalW + totalI + totalT };
+    const name = card.querySelector(".act-name").value.trim();
+    const ctx = {
+      date: isoToRu(iso),
+      name,
+      workers: totalW,
+      itr: totalI,
+      tech: totalT,
+      sum: totals.sum,
+      objects: objectsLetterBlock(lines, totals),
+      filename: filenameFor(iso, name),
+    };
+    const subject = fill(card.querySelector(".act-subject")?.value || "", ctx);
+    const body = fill(card.querySelector(".act-body-text")?.value || "", ctx);
+    preview.textContent = (subject ? subject + "\n\n" : "") + body;
+  }
 }
 
 async function refreshAll() {
@@ -262,6 +296,7 @@ async function refreshAll() {
     await refreshAct(card);
   }
   renderLog();
+  if ($("letter-text")) refreshLetter();
 }
 
 function esc(s) {
@@ -416,19 +451,25 @@ function createActCard(act, open = true) {
       <label class="field">Копия
         <textarea class="act-cc" placeholder="необязательно">${(act.cc || []).join("\n")}</textarea>
       </label>
-      <label class="field">Тема письма
-        <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&" + "quot;")}" />
-      </label>
-      <label class="field">Текст письма
-        <textarea class="act-body-text">${act.body || "Добрый день.\\n\\nНаправляю фиксацию технических и трудовых ресурсов на {date} ({name}).\\n\\n{objects}\\n\\nС уважением,\\nРахматуллин Ренат"}</textarea>
-      </label>
-      <p class="hint">Переменные: <code>{date}</code> <code>{name}</code> <code>{objects}</code> <code>{sum}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code> <code>{filename}</code>. {objects} — список всех объектов с числами.</p>
+      <details class="fold">
+        <summary>Шаблон ежедневного письма</summary>
+        <label class="field">Тема
+          <input class="act-subject" type="text" value="${(act.subject || "Фиксация ТТР {date} — {name}").replace(/"/g, "&" + "quot;")}" />
+        </label>
+        <label class="field">Текст
+          <textarea class="act-body-text"></textarea>
+        </label>
+        <p class="hint">Переменные: <code>{date}</code> <code>{name}</code> <code>{objects}</code> <code>{sum}</code> <code>{workers}</code> <code>{itr}</code> <code>{tech}</code>. В <code>{objects}</code> на это число есть итог по объекту и суммарно за день.</p>
+        <p class="hint">Как уйдёт это число</p>
+        <div class="letter-preview"></div>
+      </details>
       <div class="toolbar">
         <button type="button" class="act-reroll">Другие числа</button>
         <button type="button" class="act-lock">Зафиксировать</button>
+        <button type="button" class="act-draft">В черновик</button>
         <button type="button" class="primary act-send">Отправить сейчас</button>
       </div>
-      <p class="hint">Письмо уходит текстом, без PDF. Числа выше попадут в письмо.</p>
+      <p class="hint">«Отправить сейчас» — это число адресатам фиксации. «В черновик» — поправить текст или собрать несколько дат.</p>
     </div>
   `;
   const list = card.querySelector(".objects-list");
@@ -456,7 +497,7 @@ function bindAct(card) {
     delete manuals[id];
     card.remove();
     updateRemoveButtons();
-    syncSummaryActOptions();
+    syncLetterActs();
     refreshAll();
   });
   card.querySelector(".add-object").addEventListener("click", () => {
@@ -467,13 +508,14 @@ function bindAct(card) {
     refreshAct(card);
   });
   bindObjectEvents(card);
-  card.querySelector(".act-name").addEventListener("input", () => { syncSummaryActOptions(); refreshAct(card); });
+  card.querySelector(".act-name").addEventListener("input", () => { syncLetterActs(); refreshAct(card); });
   card.querySelector(".act-date").addEventListener("change", () => {
     delete manuals[card.dataset.id];
     refreshAct(card);
   });
   card.querySelector(".act-reroll").addEventListener("click", () => reroll(card));
   card.querySelector(".act-lock").addEventListener("click", () => lockCurrent(card).catch((err) => msg(err.message, "bad")));
+  card.querySelector(".act-draft").addEventListener("click", () => primeDraft(card));
   card.querySelector(".act-send").addEventListener("click", () => dispatch(card).catch((err) => msg(err.message, "bad")));
 }
 
@@ -520,7 +562,7 @@ function addAct(act = null) {
   $("acts").appendChild(card);
   bindAct(card);
   updateRemoveButtons();
-  syncSummaryActOptions();
+  syncLetterActs();
   refreshAct(card);
   return card;
 }
@@ -664,123 +706,307 @@ async function pollJournal(actId, iso) {
   }
 }
 
-const summaryDates = new Set([todayISO()]);
+const letterDates = new Set([todayISO()]);
+let letterDirty = false;
+let recipientsTouched = false;
 
-function syncSummaryActOptions() {
-  const sel = $("summary-act");
-  if (!sel) return false;
-  const prev = sel.value;
+function syncLetterActs() {
+  const box = $("letter-acts");
+  if (!box) return;
+  const prevIds = new Set([...box.querySelectorAll("input")].map((el) => el.value));
+  const prevOn = new Set([...box.querySelectorAll("input:checked")].map((el) => el.value));
   const cards = [...document.querySelectorAll(".act-card")];
-  sel.replaceChildren();
+  box.replaceChildren();
   for (const card of cards) {
-    const opt = document.createElement("option");
-    opt.value = card.dataset.id;
-    opt.textContent = card.querySelector(".act-name").value.trim() || "Фиксация";
-    sel.appendChild(opt);
+    const id = card.dataset.id;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = id;
+    input.checked = prevIds.size ? prevOn.has(id) || !prevIds.has(id) : true;
+    const label = document.createElement("label");
+    label.append(input, document.createTextNode(" " + (card.querySelector(".act-name").value.trim() || "Фиксация")));
+    box.appendChild(label);
   }
-  sel.disabled = cards.length === 0;
-  const still = cards.some((card) => card.dataset.id === prev);
-  if (still) sel.value = prev;
-  return still || cards.length === 0;
+  if (box.querySelector("input") && ![...box.querySelectorAll("input")].some((el) => el.checked)) {
+    box.querySelector("input").checked = true;
+  }
 }
 
-function renderSummaryDates() {
-  const box = $("summary-dates");
+function renderLetterDates() {
+  const box = $("letter-dates");
   if (!box) return;
-  if (!summaryDates.size) summaryDates.add(todayISO());
+  if (!letterDates.size) letterDates.add(todayISO());
   box.replaceChildren();
-  for (const iso of [...summaryDates].sort()) {
+  for (const iso of [...letterDates].sort()) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "on";
     btn.dataset.date = iso;
-    btn.textContent = isoToRu(iso);
+    btn.textContent = isoToRu(iso) + " ×";
     btn.title = "Убрать дату";
     box.appendChild(btn);
   }
 }
 
-function summaryIsoList() {
-  const list = [...summaryDates].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+function letterIsoList() {
+  const list = [...letterDates].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   return list.length ? list : [todayISO()];
 }
 
-function fillSummary() {
-  const area = $("summary-text");
-  if (!area) return;
-  const settings = readForm();
-  const id = $("summary-act").value;
-  const act = settings.acts.find((a) => a.id === id) || settings.acts[0];
-  area.value = act ? summaryText(act, summaryIsoList(), journal) : "";
+function selectedLetterActs() {
+  const ids = new Set([...document.querySelectorAll("#letter-acts input:checked")].map((el) => el.value));
+  const acts = readForm().acts;
+  const chosen = acts.filter((a) => ids.has(a.id));
+  return chosen.length ? chosen : acts.slice(0, 1);
 }
 
-function bindSummary() {
-  const dateInput = $("summary-add-date");
-  if (dateInput && !dateInput.value) dateInput.value = todayISO();
-  renderSummaryDates();
-  syncSummaryActOptions();
-  fillSummary();
-  $("summary-act").addEventListener("change", fillSummary);
-  $("summary-add-btn").addEventListener("click", () => {
-    const value = $("summary-add-date").value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) {
-      msg("Выбери дату для сводки.", "bad");
-      return;
-    }
-    summaryDates.add(value);
-    renderSummaryDates();
-    fillSummary();
-  });
-  $("summary-dates").addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-date]");
-    if (!btn) return;
-    summaryDates.delete(btn.dataset.date);
-    if (!summaryDates.size) summaryDates.add(todayISO());
-    renderSummaryDates();
-    fillSummary();
-  });
-  $("summary-generate").addEventListener("click", () => {
-    fillSummary();
-    msg("Сводка собрана.", "ok");
-  });
-  $("summary-copy").addEventListener("click", async () => {
-    fillSummary();
-    const text = $("summary-text").value;
-    try {
-      await navigator.clipboard.writeText(text);
-      msg("Текст сводки скопирован.", "ok");
-    } catch {
-      $("summary-text").focus();
-      $("summary-text").select();
-      msg("Выделил текст — скопируй его вручную.", "info");
-    }
-  });
-  $("summary-send").addEventListener("click", () => sendSummary().catch((err) => msg(err.message, "bad")));
+function letterShape() {
+  return document.querySelector("input[name=letter-shape]:checked")?.value || "detail";
 }
 
-async function sendSummary() {
+function rangeDays(from, to) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return [];
+  let a = from;
+  let b = to;
+  if (a > b) [a, b] = [b, a];
+  const out = [];
+  let cur = a;
+  for (let i = 0; i < 62 && cur <= b; i++) {
+    out.push(cur);
+    cur = addDays(cur, 1);
+  }
+  return out;
+}
+
+function presetDates(kind) {
+  const today = todayISO();
+  if (kind === "today") return [today];
+  if (kind === "yesterday") return [addDays(today, -1)];
+  if (kind === "week7") return Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  if (kind === "thisweek") {
+    const wd = weekdayIndex(today);
+    const monday = addDays(today, wd === 0 ? -6 : 1 - wd);
+    return rangeDays(monday, addDays(monday, 6));
+  }
+  return [today];
+}
+
+function setLetterDates(list, add) {
+  if (!add) letterDates.clear();
+  for (const iso of list) if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) letterDates.add(iso);
+  if (!letterDates.size) letterDates.add(todayISO());
+  renderLetterDates();
+  refreshLetter();
+}
+
+function buildLetter() {
+  return composeLetter({
+    acts: selectedLetterActs(),
+    isos: letterIsoList(),
+    journal,
+    shape: letterShape(),
+    signName: $("from-name")?.value.trim() || "Рахматуллин Ренат",
+  });
+}
+
+function fillRecipientsFromActs(force) {
+  if (recipientsTouched && !force) return;
+  const acts = selectedLetterActs();
+  const to = [...new Set(acts.flatMap((a) => a.to || []))];
+  const cc = [...new Set(acts.flatMap((a) => a.cc || []))];
+  if ($("letter-to")) $("letter-to").value = to.join("\n");
+  if ($("letter-cc")) $("letter-cc").value = cc.join("\n");
+}
+
+function showLetterMeta(built) {
+  const el = $("letter-meta");
+  if (!el || !built) return;
+  if (!built.days.length) {
+    el.textContent = "Выбери фиксацию и хотя бы одну дату.";
+    return;
+  }
+  const manyActs = new Set(built.days.map((d) => d.actId)).size > 1;
+  const parts = built.days.map((d) => `${manyActs ? d.actName + " " : ""}${isoToRu(d.iso)} — ${peoplePhrase(d.people)}`);
+  const extra = built.days.length > 1 ? ". Всего " + peoplePhrase(built.grand) : "";
+  el.textContent = parts.join(" · ") + extra;
+}
+
+function refreshLetter(force) {
+  if (!$("letter-text")) return null;
+  const built = buildLetter();
+  showLetterMeta(built);
+  fillRecipientsFromActs(false);
+  if (letterDirty && !force) {
+    $("letter-dirty").hidden = false;
+    return built;
+  }
+  $("letter-subject").value = built.subject;
+  $("letter-text").value = built.text;
+  letterDirty = false;
+  if ($("letter-dirty")) $("letter-dirty").hidden = true;
+  return built;
+}
+
+function primeDraft(card) {
+  const iso = actDate(card);
+  letterDates.clear();
+  letterDates.add(iso);
+  renderLetterDates();
+  for (const input of document.querySelectorAll("#letter-acts input")) input.checked = input.value === card.dataset.id;
+  const detail = document.querySelector("input[name=letter-shape][value=detail]");
+  if (detail) detail.checked = true;
+  recipientsTouched = false;
+  letterDirty = false;
+  fillRecipientsFromActs(true);
+  refreshLetter(true);
+  $("letter-compose")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  msg("Это число собрано в черновик. Текст можно поправить — уйдёт именно он.", "ok");
+}
+
+function ensureLetterText() {
+  if (!$("letter-text").value.trim()) refreshLetter(true);
+}
+
+async function copyLetter() {
+  ensureLetterText();
+  const text = $("letter-text").value;
+  try {
+    await navigator.clipboard.writeText(text);
+    msg("Текст письма скопирован.", "ok");
+  } catch {
+    $("letter-text").focus();
+    $("letter-text").select();
+    msg("Выделил текст — скопируй его вручную.", "info");
+  }
+}
+
+function openLetterMail() {
+  ensureLetterText();
+  const to = parseList($("letter-to").value);
+  const cc = parseList($("letter-cc").value);
+  const subject = $("letter-subject").value.trim() || "Численность";
+  const body = $("letter-text").value;
+  if (!to.length) {
+    msg("Укажи, кому открыть письмо.", "bad");
+    $("letter-to").focus();
+    return;
+  }
+  const q = new URLSearchParams();
+  if (cc.length) q.set("cc", cc.join(","));
+  q.set("subject", subject);
+  const withBody = new URLSearchParams(q);
+  withBody.set("body", body);
+  const full = `mailto:${to.join(",")}?${withBody.toString()}`;
+  if (full.length > 1800) {
+    navigator.clipboard.writeText(body).catch(() => {});
+    window.location.href = `mailto:${to.join(",")}?${q.toString()}`;
+    msg("Текст длинный для окна почты — скопировал его. Вставь в письмо.", "info");
+    return;
+  }
+  window.location.href = full;
+}
+
+async function sendLetter() {
   if (!token()) {
-    msg("Чтобы отправить сводку, запомни токен GitHub.", "bad");
+    msg("Чтобы отправить с рабочей почты, запомни токен GitHub. Или открой письмо в своей почте.", "bad");
     return;
   }
-  syncSummaryActOptions();
-  const actId = $("summary-act").value;
-  if (!actId) {
-    msg("Выбери фиксацию.", "bad");
+  ensureLetterText();
+  const subject = $("letter-subject").value.trim();
+  const text = $("letter-text").value;
+  const to = parseList($("letter-to").value);
+  const cc = parseList($("letter-cc").value);
+  if (!subject || !text.trim()) {
+    msg("В черновике нет темы или текста.", "bad");
     return;
   }
-  const isos = summaryIsoList();
-  fillSummary();
-  if (dirty()) {
-    const ok = await saveSettings();
-    if (!ok) return;
+  if (!to.length) {
+    msg("Укажи адресатов этого письма.", "bad");
+    $("letter-to").focus();
+    return;
   }
-  msg("Ставлю сводку в очередь…", "info");
+  if (!confirm("Отправить письмо «" + subject + "» на " + to.join(", ") + "?")) return;
+  msg("Записываю черновик и ставлю отправку…", "info");
+  await putJson("data/ttr/outbox.json", {
+    subject,
+    text,
+    to,
+    cc,
+    createdAt: new Date().toISOString(),
+  }, "ttr: черновик письма");
   await gh("POST", `/repos/${REPO}/actions/workflows/ttr-daily.yml/dispatches`, {
     ref: "main",
-    inputs: { mode: "summary", date: isos.join(","), act: actId },
+    inputs: { mode: "letter", date: letterIsoList().join(","), act: selectedLetterActs()[0]?.id || "" },
   });
-  msg("Сводка за " + isos.map(isoToRu).join(", ") + " поставлена в очередь. Письмо уйдёт текстом, без PDF.", "ok");
+  msg("Письмо поставлено в очередь. Уйдёт текст черновика, как он сейчас на экране.", "ok");
+}
+
+function bindLetter() {
+  const from = $("letter-from");
+  const to = $("letter-to-date");
+  const today = todayISO();
+  if (from && !from.value) from.value = today;
+  if (to && !to.value) to.value = today;
+  renderLetterDates();
+  syncLetterActs();
+  refreshLetter(true);
+  $("letter-acts").addEventListener("change", () => {
+    fillRecipientsFromActs(false);
+    refreshLetter(false);
+  });
+  $("letter-presets").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-preset]");
+    if (!btn) return;
+    setLetterDates(presetDates(btn.dataset.preset), false);
+  });
+  $("letter-dates").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-date]");
+    if (!btn) return;
+    letterDates.delete(btn.dataset.date);
+    if (!letterDates.size) letterDates.add(todayISO());
+    renderLetterDates();
+    refreshLetter(false);
+  });
+  $("letter-add-range").addEventListener("click", () => {
+    const days = rangeDays($("letter-from").value, $("letter-to-date").value);
+    if (!days.length) {
+      msg("Укажи период: дата «с» и дата «по».", "bad");
+      return;
+    }
+    setLetterDates(days, true);
+  });
+  $("letter-add-one").addEventListener("click", () => {
+    const value = $("letter-from").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) {
+      msg("Выбери дату в поле «с».", "bad");
+      return;
+    }
+    setLetterDates([value], true);
+  });
+  $("letter-clear-dates").addEventListener("click", () => setLetterDates([todayISO()], false));
+  for (const input of document.querySelectorAll("input[name=letter-shape]")) {
+    input.addEventListener("change", () => refreshLetter(false));
+  }
+  const markDirty = () => {
+    letterDirty = true;
+    if ($("letter-dirty")) $("letter-dirty").hidden = false;
+  };
+  $("letter-subject").addEventListener("input", markDirty);
+  $("letter-text").addEventListener("input", markDirty);
+  $("letter-to").addEventListener("input", () => { recipientsTouched = true; });
+  $("letter-cc").addEventListener("input", () => { recipientsTouched = true; });
+  $("letter-use-acts").addEventListener("click", () => {
+    fillRecipientsFromActs(true);
+    recipientsTouched = true;
+    msg("Адресаты подставлены из выбранных фиксаций.", "ok");
+  });
+  $("letter-build").addEventListener("click", () => {
+    refreshLetter(true);
+    msg("Черновик собран заново. На каждое число написано, сколько человек суммарно.", "ok");
+  });
+  $("letter-copy").addEventListener("click", () => copyLetter().catch((err) => msg(err.message, "bad")));
+  $("letter-mailto").addEventListener("click", openLetterMail);
+  $("letter-send").addEventListener("click", () => sendLetter().catch((err) => msg(err.message, "bad")));
 }
 
 async function checkSecret() {
@@ -814,7 +1040,7 @@ async function init() {
   writeMail(saved);
   for (const act of saved.acts) addAct(act);
   if (!saved.acts.length) addAct();
-  bindSummary();
+  bindLetter();
   await checkSecret();
   await refreshAll();
 

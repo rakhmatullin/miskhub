@@ -54,6 +54,28 @@
     .log-sub td { color: var(--mute); background: #09111e; font-weight: 500; }
     .log-sub .log-num { color: #9fd0de; font-weight: 700; white-space: nowrap; }
     .log-name { color: var(--text); }
+    .letter-steps { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+    .step-no { color: var(--acc); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 4px; }
+    .choice { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+    .checks { display: flex; flex-direction: column; gap: 8px; }
+    .checks label, .pick {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: #09111e; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      color: var(--text);
+    }
+    .pick { flex: 1 1 220px; align-items: center; }
+    .pick input, .checks input { margin-top: 3px; }
+    .stack-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .stack-btns button, .choice button, .days button { min-height: 42px; }
+    #letter-meta { color: #d7ecff; font-size: 14px; margin: 0 0 8px; }
+    textarea.short { min-height: 72px; }
+    details.fold { margin: 10px 0; background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    details.fold summary { cursor: pointer; color: var(--text); font-weight: 600; }
+    .letter-preview {
+      white-space: pre-wrap; margin-top: 8px;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #d5deef; background: #070d18; border-radius: 10px; padding: 10px; max-height: 240px; overflow: auto;
+    }
 
     @media (max-width: 900px) {
       .layout, .row3 { grid-template-columns: 1fr; }
@@ -71,8 +93,8 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.1</span></h1>
-      <p class="lead">Письмо уходит текстом: дата и числа по объектам. План всегда равен факту. Можно несколько фиксаций. Утром письма сами уходят с рабочей почты.</p>
+      <h1>Фиксация ТТР <span class="ver">v2.2</span></h1>
+      <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
     <div class="layout">
@@ -97,7 +119,7 @@
         <label class="field">От кого, ящик Mail.ru<input id="from" type="email" autocomplete="off" placeholder="name@mis-k.ru" /></label>
         <label class="field">Имя отправителя<input id="from-name" type="text" /></label>
         <label class="field">Сервер<input id="smtp" type="text" /></label>
-        <p class="hint">Тема и текст письма задаются в каждой фиксации. Переменные: {date} {name} {objects} {sum} {workers} {itr} {tech} {filename}.</p>
+        <p class="hint">Тема и текст ежедневного письма — в карточке фиксации, в «Шаблоне». В <code>{objects}</code> по каждому объекту и за день есть, сколько человек суммарно.</p>
         <label class="field">Пароль Mail.ru<input id="password" type="password" autocomplete="new-password" placeholder="не менять, если уже сохранён" /></label>
         <p class="hint">Пароль не пишется в папку data: репозиторий публичный. Он уходит в секрет GitHub <code>TTR_MAIL_PASSWORD</code>. Для Mail.ru лучше пароль приложения: Настройки → Безопасность → Пароли для внешних приложений.</p>
         <details>
@@ -118,29 +140,75 @@
         <p class="hint" id="secret-state"></p>
       </section>
     </div>
-    <section class="panel" style="margin-top:16px">
-      <h2>Текстовая сводка</h2>
-      <p class="hint">Выбери одну или несколько дат и получи готовый текст для копирования или отправки адресатам. Формат грамотный, с полными названиями категорий.</p>
-      <label class="field">Фиксация
-        <select id="summary-act"></select>
-      </label>
-      <div class="field">Даты
-        <div id="summary-dates" class="days" style="flex-wrap:wrap; gap:6px;"></div>
-        <div style="display:flex; gap:8px; margin-top:8px;">
-          <input id="summary-add-date" type="date" />
-          <button type="button" id="summary-add-btn">Добавить дату</button>
+    <div class="letter-steps" id="letter-compose">
+      <section class="panel">
+        <p class="step-no">Шаг 1</p>
+        <h2>Что включить</h2>
+        <p class="hint">Любые фиксации и даты. Утренняя автоотправка от этого не меняется.</p>
+        <div class="field">Фиксации
+          <div id="letter-acts" class="checks"></div>
         </div>
-      </div>
-      <label class="field">Текст сводки
-        <textarea id="summary-text" readonly placeholder="Нажми «Сгенерировать»" style="min-height:180px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:13px; line-height:1.45;"></textarea>
-      </label>
-      <div class="toolbar">
-        <button type="button" class="primary" id="summary-generate">Сгенерировать</button>
-        <button type="button" id="summary-copy">Скопировать текст</button>
-        <button type="button" class="primary" id="summary-send">Отправить адресатам</button>
-      </div>
-      <p class="hint" id="summary-hint">Адресаты берутся из выбранной фиксации. Отправка идёт через тот же механизм, что и обычные письма (без PDF, только текст).</p>
-    </section>
+        <div class="field">Даты
+          <div class="choice" id="letter-presets">
+            <button type="button" data-preset="today">Сегодня</button>
+            <button type="button" data-preset="yesterday">Вчера</button>
+            <button type="button" data-preset="week7">7 дней</button>
+            <button type="button" data-preset="thisweek">Эта неделя</button>
+          </div>
+          <div id="letter-dates" class="days"></div>
+          <div class="row2" style="margin-top:8px">
+            <label class="field">С<input id="letter-from" type="date" /></label>
+            <label class="field">По<input id="letter-to-date" type="date" /></label>
+          </div>
+          <div class="toolbar">
+            <button type="button" id="letter-add-range">Добавить период</button>
+            <button type="button" id="letter-add-one">Добавить одно число</button>
+            <button type="button" id="letter-clear-dates">Очистить</button>
+          </div>
+        </div>
+        <div class="field">Вид текста
+          <div class="choice">
+            <label class="pick"><input type="radio" name="letter-shape" value="detail" checked /> По объектам и итог людей на каждое число</label>
+            <label class="pick"><input type="radio" name="letter-shape" value="short" /> Только дата и сколько человек</label>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="step-no">Шаг 2</p>
+        <h2>Черновик</h2>
+        <p class="hint" id="letter-meta"></p>
+        <label class="field">Тема
+          <input id="letter-subject" type="text" />
+        </label>
+        <label class="field">Текст
+          <textarea id="letter-text" placeholder="Соберётся из шага 1" style="min-height:220px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:13px; line-height:1.45;"></textarea>
+        </label>
+        <p class="hint" id="letter-dirty" hidden>Текст правился вручную. «Собрать заново» заменит его.</p>
+        <div class="toolbar">
+          <button type="button" class="primary" id="letter-build">Собрать заново</button>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="step-no">Шаг 3</p>
+        <h2>Куда отправить</h2>
+        <p class="hint">Адреса только этого письма. Карточки фиксаций не переписываются.</p>
+        <label class="field">Кому
+          <textarea id="letter-to" class="short" placeholder="name@company.ru"></textarea>
+        </label>
+        <label class="field">Копия
+          <textarea id="letter-cc" class="short" placeholder="необязательно"></textarea>
+        </label>
+        <div class="toolbar">
+          <button type="button" id="letter-use-acts">Подставить из фиксаций</button>
+        </div>
+        <div class="stack-btns">
+          <button type="button" id="letter-copy">Скопировать текст</button>
+          <button type="button" id="letter-mailto">Открыть в своей почте</button>
+          <button type="button" class="primary" id="letter-send">Отправить с рабочей почты</button>
+        </div>
+        <p class="hint">Своя почта откроет письмо на этом телефоне. Рабочая — ящик Mail.ru, как утренние фиксации. Уйдёт ровно текст черновика.</p>
+      </section>
+    </div>
     <section class="panel" style="margin-top:16px">
       <h2>Журнал</h2>
       <p class="hint">Под каждым днём — подстрочка объекта: шифр, название и свои рабочие, ИТР, техника. Нажми дату, чтобы открыть день.</p>
@@ -153,7 +221,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=7"></script>
+  <script type="module" src="./ttr-app.js?v=8"></script>
   <script src="./hub-nav.js?v=12"></script>
 </body>
 </html>
