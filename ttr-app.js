@@ -757,6 +757,18 @@ function renderLetterDates() {
     }
   }
   syncPresetHighlight();
+  syncRangeFields();
+}
+
+function syncRangeFields() {
+  const isos = letterIsoList();
+  const from = $("letter-from");
+  const to = $("letter-to-date");
+  if (!from || !to) return;
+  const first = isos[0] || "";
+  const last = isos[isos.length - 1] || "";
+  if (document.activeElement !== from) from.value = first;
+  if (document.activeElement !== to) to.value = last;
 }
 
 function dateChoiceLabel(iso) {
@@ -856,7 +868,7 @@ function showLetterMeta(built) {
   const el = $("letter-meta");
   if (!el || !built) return;
   if (!built.days.length) {
-    el.textContent = "Дат нет. Выбери нужные отдельно.";
+    el.textContent = "Ничего не выбрано.";
     return;
   }
   const manyActs = new Set(built.days.map((d) => d.actId)).size > 1;
