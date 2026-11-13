@@ -22,7 +22,11 @@
       width: 100%; background: #09111e; color: var(--text); border: 1px solid var(--line);
       border-radius: 10px; padding: 12px; font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
     }
-    .field select { min-height: 48px; }
+    .field input[type="checkbox"],
+    .field input[type="radio"] {
+      width: 22px; height: 22px; min-height: 0; padding: 0; margin: 2px 0 0;
+      flex: 0 0 22px; border-radius: 6px; accent-color: #5b9bd5;
+    }
     textarea { min-height: 140px; resize: vertical; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -54,25 +58,36 @@
     .log-sub td { color: var(--mute); background: #09111e; font-weight: 500; }
     .log-sub .log-num { color: #9fd0de; font-weight: 700; white-space: nowrap; }
     .log-name { color: var(--text); }
-    .letter-steps { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+    .letter-steps { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
     .step-no { color: var(--acc); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 4px; }
-    .choice { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+    .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
     .checks { display: flex; flex-direction: column; gap: 8px; }
     .checks label, .pick {
-      display: flex; gap: 10px; align-items: flex-start;
-      background: #09111e; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
-      color: var(--text);
+      display: flex; gap: 12px; align-items: flex-start; min-width: 0; width: 100%;
+      background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+      color: var(--text); box-sizing: border-box;
     }
-    .pick { flex: 1 1 220px; align-items: center; }
-    .pick input, .checks input { margin-top: 3px; }
+    .pick { grid-column: 1 / -1; }
+    .pick:has(input:checked), .checks label:has(input:checked) {
+      border-color: #2b6cb0; background: #10233f;
+    }
+    .pick span, .checks label span { flex: 1; min-width: 0; display: block; line-height: 1.35; overflow-wrap: anywhere; }
+    .pick b { display: block; color: #fff; font-weight: 650; }
+    .pick small { display: block; margin-top: 2px; color: var(--mute); font-size: 12px; line-height: 1.35; }
+    #letter-meta { color: #d7ecff; font-size: 15px; margin: 0 0 8px; line-height: 1.4; }
     .stack-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-    .stack-btns button, .choice button, .days button { min-height: 42px; }
-    #letter-meta { color: #d7ecff; font-size: 14px; margin: 0 0 8px; }
+    .stack-btns button, .choice button, .days button { min-height: 44px; }
+    .choice button { width: 100%; }
+    .letter-text {
+      min-height: 240px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 1.45;
+    }
     textarea.short { min-height: 72px; }
     details.fold { margin: 10px 0; background: #09111e; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
     details.fold summary { cursor: pointer; color: var(--text); font-weight: 600; }
     .letter-preview {
-      white-space: pre-wrap; margin-top: 8px;
+      white-space: pre-wrap; margin-top: 8px; overflow-wrap: anywhere;
       font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       color: #d5deef; background: #070d18; border-radius: 10px; padding: 10px; max-height: 240px; overflow: auto;
     }
@@ -80,12 +95,18 @@
     @media (max-width: 900px) {
       .layout, .row3 { grid-template-columns: 1fr; }
       .hero h1 { font-size: 28px; }
-      main { padding: 22px 14px 64px; }
+      main { padding: 18px 12px 72px; }
       .nums b { font-size: 22px; }
+      .panel { padding: 14px; }
+      #letter-compose .toolbar { flex-direction: column; }
+      #letter-compose .toolbar button,
+      .act-body .toolbar button,
+      .stack-btns button { width: 100%; }
+      .letter-text { min-height: 200px; }
     }
   </style>
 </head>
-<body data-page="ttr">
+<body data-page="ttr" data-version="2.3">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -93,7 +114,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.2</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.3</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -168,8 +189,12 @@
         </div>
         <div class="field">Вид текста
           <div class="choice">
-            <label class="pick"><input type="radio" name="letter-shape" value="detail" checked /> По объектам и итог людей на каждое число</label>
-            <label class="pick"><input type="radio" name="letter-shape" value="short" /> Только дата и сколько человек</label>
+            <label class="pick"><input type="radio" name="letter-shape" value="detail" checked />
+              <span><b>Подробно</b><small>По объектам. На каждое число — сколько человек суммарно.</small></span>
+            </label>
+            <label class="pick"><input type="radio" name="letter-shape" value="short" />
+              <span><b>Коротко</b><small>Только дата и сколько человек.</small></span>
+            </label>
           </div>
         </div>
       </section>
@@ -181,7 +206,7 @@
           <input id="letter-subject" type="text" />
         </label>
         <label class="field">Текст
-          <textarea id="letter-text" placeholder="Соберётся из шага 1" style="min-height:220px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:13px; line-height:1.45;"></textarea>
+          <textarea id="letter-text" class="letter-text" placeholder="Соберётся из шага 1"></textarea>
         </label>
         <p class="hint" id="letter-dirty" hidden>Текст правился вручную. «Собрать заново» заменит его.</p>
         <div class="toolbar">
@@ -221,7 +246,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=8"></script>
-  <script src="./hub-nav.js?v=12"></script>
+  <script type="module" src="./ttr-app.js?v=9"></script>
+  <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>

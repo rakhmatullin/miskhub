@@ -12,7 +12,7 @@ import {
   peoplePhrase,
   todayISO,
   weekdayIndex,
-} from "./ttr-core.js?v=8";
+} from "./ttr-core.js?v=9";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -724,7 +724,9 @@ function syncLetterActs() {
     input.value = id;
     input.checked = prevIds.size ? prevOn.has(id) || !prevIds.has(id) : true;
     const label = document.createElement("label");
-    label.append(input, document.createTextNode(" " + (card.querySelector(".act-name").value.trim() || "Фиксация")));
+    const span = document.createElement("span");
+    span.textContent = card.querySelector(".act-name").value.trim() || "Фиксация";
+    label.append(input, span);
     box.appendChild(label);
   }
   if (box.querySelector("input") && ![...box.querySelectorAll("input")].some((el) => el.checked)) {
