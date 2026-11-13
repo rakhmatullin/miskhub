@@ -77,7 +77,8 @@
     #letter-meta { color: #d7ecff; font-size: 15px; margin: 0 0 8px; line-height: 1.4; }
     .stack-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
     .stack-btns button, .choice button, .days button { min-height: 44px; }
-    .dates-empty { margin: 4px 0 0; }
+    #letter-presets button.on { background: #1c4d86; border-color: #2b6cb0; color: #fff; }
+    details.obj-settings { margin: 8px 0 0; }
     .letter-text {
       min-height: 240px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -106,7 +107,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.4">
+<body data-page="ttr" data-version="2.5">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -114,7 +115,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.4</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.5</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -187,16 +188,6 @@
             <button type="button" id="letter-clear-dates">Очистить</button>
           </div>
         </div>
-        <div class="field">Вид текста
-          <div class="choice">
-            <label class="pick"><input type="radio" name="letter-shape" value="detail" checked />
-              <span><b>Подробно</b><small>По объектам. На каждое число — сколько человек суммарно.</small></span>
-            </label>
-            <label class="pick"><input type="radio" name="letter-shape" value="short" />
-              <span><b>Коротко</b><small>Только дата и сколько человек.</small></span>
-            </label>
-          </div>
-        </div>
       </section>
       <section class="panel">
         <p class="step-no">Шаг 2</p>
@@ -246,7 +237,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=10"></script>
+  <script type="module" src="./ttr-app.js?v=11"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>

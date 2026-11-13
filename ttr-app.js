@@ -409,20 +409,23 @@ function objectRowHtml(obj, idx) {
         <label class="field" style="margin:0;flex:1">Название<input class="obj-name" type="text" value="${(o.name || "").replace(/"/g, "&" + "quot;")}" /></label>
         <button type="button" class="remove-object" title="Удалить объект" style="align-self:flex-end">×</button>
       </div>
-      <div class="row2">
-        <label class="field">Рабочие от<input class="w-min" type="number" min="0" max="999" value="${o.ranges.workers.min}" /></label>
-        <label class="field">Рабочие до<input class="w-max" type="number" min="0" max="999" value="${o.ranges.workers.max}" /></label>
-        <label class="field">ИТР от<input class="i-min" type="number" min="0" max="999" value="${o.ranges.itr.min}" /></label>
-        <label class="field">ИТР до<input class="i-max" type="number" min="0" max="999" value="${o.ranges.itr.max}" /></label>
-        <label class="field">Техника от<input class="t-min" type="number" min="0" max="999" value="${o.ranges.tech.min}" /></label>
-        <label class="field">Техника до<input class="t-max" type="number" min="0" max="999" value="${o.ranges.tech.max}" /></label>
-      </div>
       <div class="obj-nums" style="display:flex;gap:12px;font-size:13px;color:var(--mute);margin-top:6px">
         <span>Раб. <b class="on-w">—</b></span>
         <span>ИТР <b class="on-i">—</b></span>
         <span>Тех. <b class="on-t">—</b></span>
         <span>Σ <b class="on-s">—</b></span>
       </div>
+      <details class="fold obj-settings">
+        <summary>Настройки объекта</summary>
+        <div class="row2">
+          <label class="field">Рабочие от<input class="w-min" type="number" min="0" max="999" value="${o.ranges.workers.min}" /></label>
+          <label class="field">Рабочие до<input class="w-max" type="number" min="0" max="999" value="${o.ranges.workers.max}" /></label>
+          <label class="field">ИТР от<input class="i-min" type="number" min="0" max="999" value="${o.ranges.itr.min}" /></label>
+          <label class="field">ИТР до<input class="i-max" type="number" min="0" max="999" value="${o.ranges.itr.max}" /></label>
+          <label class="field">Техника от<input class="t-min" type="number" min="0" max="999" value="${o.ranges.tech.min}" /></label>
+          <label class="field">Техника до<input class="t-max" type="number" min="0" max="999" value="${o.ranges.tech.max}" /></label>
+        </div>
+      </details>
     </div>`;
 }
 
@@ -742,16 +745,33 @@ function renderLetterDates() {
     note.className = "hint dates-empty";
     note.textContent = "Дат нет. Выбери нужные отдельно.";
     box.appendChild(note);
-    return;
+  } else {
+    for (const iso of [...letterDates].sort()) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "on";
+      btn.dataset.date = iso;
+      btn.textContent = isoToRu(iso) + " ×";
+      btn.title = "Убрать это число";
+      box.appendChild(btn);
+    }
   }
-  for (const iso of [...letterDates].sort()) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "on";
-    btn.dataset.date = iso;
-    btn.textContent = isoToRu(iso) + " ×";
-    btn.title = "Убрать это число";
-    box.appendChild(btn);
+  syncPresetHighlight();
+}
+
+function syncPresetHighlight() {
+  const isos = letterIsoList();
+  const today = todayISO();
+  const one = {
+    today,
+    yesterday: addDays(today, -1),
+    tomorrow: addDays(today, 1),
+    after: addDays(today, 2),
+  };
+  for (const btn of document.querySelectorAll("#letter-presets [data-preset]")) {
+    const hit = isos.length === 1 && isos[0] === one[btn.dataset.preset];
+    btn.classList.toggle("on", hit);
+    btn.setAttribute("aria-pressed", hit ? "true" : "false");
   }
 }
 
@@ -767,7 +787,7 @@ function selectedLetterActs() {
 }
 
 function letterShape() {
-  return document.querySelector("input[name=letter-shape]:checked")?.value || "detail";
+  return "detail";
 }
 
 function rangeDays(from, to) {
@@ -856,8 +876,6 @@ function primeDraft(card) {
   letterDates.add(iso);
   renderLetterDates();
   for (const input of document.querySelectorAll("#letter-acts input")) input.checked = input.value === card.dataset.id;
-  const detail = document.querySelector("input[name=letter-shape][value=detail]");
-  if (detail) detail.checked = true;
   recipientsTouched = false;
   letterDirty = false;
   fillRecipientsFromActs(true);
@@ -986,9 +1004,6 @@ function bindLetter() {
     setLetterDates([value], true);
   });
   $("letter-clear-dates").addEventListener("click", () => setLetterDates([], false));
-  for (const input of document.querySelectorAll("input[name=letter-shape]")) {
-    input.addEventListener("change", () => refreshLetter(false));
-  }
   const markDirty = () => {
     letterDirty = true;
     if ($("letter-dirty")) $("letter-dirty").hidden = false;
