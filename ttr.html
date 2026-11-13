@@ -107,7 +107,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.7">
+<body data-page="ttr" data-version="2.8">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -115,7 +115,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.7</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.8</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -193,6 +193,33 @@
         <p class="step-no">Шаг 2</p>
         <h2>Черновик</h2>
         <p class="hint" id="letter-meta"></p>
+        <details class="fold">
+          <summary>Шаблон</summary>
+          <p class="hint">Здесь переменные. Числа подставляются в черновик. Пустое поле вернётся к обычному тексту.</p>
+          <label class="field">Тема
+            <input id="letter-tpl-subject" type="text" value="Численность {dates} — {name}" />
+          </label>
+          <label class="field">Письмо
+            <textarea id="letter-tpl-body" class="short">Добрый день!
+
+Численность по «{name}».
+
+{days}
+
+С уважением,
+{sign}</textarea>
+          </label>
+          <label class="field">Одно число
+            <textarea id="letter-tpl-day" class="short">{date} — суммарно {sum}
+{objects}</textarea>
+          </label>
+          <label class="field">Объект
+            <textarea id="letter-tpl-object" class="short">{number}. {object}
+Рабочие: {workers}, ИТР: {itr}, машинисты: {tech}. Итого {sum}.</textarea>
+          </label>
+          <p class="hint">Письмо: {name} {dates} {days} {sign}. Число: {date} {sum} {workers} {itr} {tech} {objects}. Объект: {number} {object} {workers} {itr} {tech} {sum}. Суммы по всем дням нет.</p>
+          <button type="button" id="letter-save-template">Сохранить шаблон</button>
+        </details>
         <label class="field">Тема
           <input id="letter-subject" type="text" />
         </label>
@@ -237,7 +264,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=13"></script>
+  <script type="module" src="./ttr-app.js?v=14"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>

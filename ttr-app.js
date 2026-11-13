@@ -11,7 +11,7 @@ import {
   parseList,
   peoplePhrase,
   todayISO,
-} from "./ttr-core.js?v=10";
+} from "./ttr-core.js?v=14";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -95,6 +95,7 @@ function readForm() {
   return normalizeSettings({
     mail: readMail(),
     acts: readActs(),
+    letter: readLetterTemplate(),
   });
 }
 
@@ -110,6 +111,28 @@ function writeMail(settings) {
   for (const btn of document.querySelectorAll("#days button")) {
     btn.classList.toggle("on", s.mail.weekdays.includes(Number(btn.dataset.d)));
   }
+  writeLetterTemplate(s.letter);
+}
+
+function readLetterTemplate() {
+  const value = (id) => $(id)?.value ?? "";
+  return {
+    subject: value("letter-tpl-subject"),
+    body: value("letter-tpl-body"),
+    day: value("letter-tpl-day"),
+    object: value("letter-tpl-object"),
+  };
+}
+
+function writeLetterTemplate(letter) {
+  const set = (id, text) => {
+    const el = $(id);
+    if (el) el.value = String(text || "").replace(/\\n/g, "\n");
+  };
+  set("letter-tpl-subject", letter?.subject);
+  set("letter-tpl-body", letter?.body);
+  set("letter-tpl-day", letter?.day);
+  set("letter-tpl-object", letter?.object);
 }
 
 function dirty() {
@@ -852,6 +875,7 @@ function buildLetter() {
     journal,
     shape: letterShape(),
     signName: $("from-name")?.value.trim() || "Рахматуллин Ренат",
+    template: readLetterTemplate(),
   });
 }
 
@@ -873,8 +897,7 @@ function showLetterMeta(built) {
   }
   const manyActs = new Set(built.days.map((d) => d.actId)).size > 1;
   const parts = built.days.map((d) => `${manyActs ? d.actName + " " : ""}${isoToRu(d.iso)} — ${peoplePhrase(d.people)}`);
-  const extra = built.days.length > 1 ? ". Всего " + peoplePhrase(built.grand) : "";
-  el.textContent = parts.join(" · ") + extra;
+  el.textContent = parts.join(" · ");
 }
 
 function refreshLetter(force) {
@@ -1042,8 +1065,12 @@ function bindLetter() {
   });
   $("letter-build").addEventListener("click", () => {
     refreshLetter(true);
-    msg("Черновик собран заново. На каждое число написано, сколько человек суммарно.", "ok");
+    msg("Черновик собран из шаблона.", "ok");
   });
+  for (const id of ["letter-tpl-subject", "letter-tpl-body", "letter-tpl-day", "letter-tpl-object"]) {
+    $(id).addEventListener("input", () => refreshLetter(false));
+  }
+  $("letter-save-template").addEventListener("click", () => saveSettings().catch((err) => msg(err.message, "bad")));
   $("letter-copy").addEventListener("click", () => copyLetter().catch((err) => msg(err.message, "bad")));
   $("letter-mailto").addEventListener("click", openLetterMail);
   $("letter-send").addEventListener("click", () => sendLetter().catch((err) => msg(err.message, "bad")));

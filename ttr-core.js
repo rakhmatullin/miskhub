@@ -96,6 +96,27 @@ function normalizeAct(raw, idx = 0) {
   };
 }
 
+export const DEFAULT_LETTER = {
+  subject: "Численность {dates} — {name}",
+  body: "Добрый день!\n\nЧисленность по «{name}».\n\n{days}\n\nС уважением,\n{sign}",
+  day: "{date} — суммарно {sum}\n{objects}",
+  object: "{number}. {object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}. Итого {sum}.",
+};
+
+function normalizeLetter(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const pick = (value, fallback) => {
+    const text = String(value ?? "").replace(/\\n/g, "\n");
+    return text.trim() ? text : fallback;
+  };
+  return {
+    subject: pick(src.subject, DEFAULT_LETTER.subject),
+    body: pick(src.body, DEFAULT_LETTER.body),
+    day: pick(src.day, DEFAULT_LETTER.day),
+    object: pick(src.object, DEFAULT_LETTER.object),
+  };
+}
+
 export function normalizeSettings(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
   const mail = src.mail && typeof src.mail === "object" ? src.mail : {};
@@ -127,6 +148,7 @@ export function normalizeSettings(raw) {
       body: String(mail.body ?? DEFAULTS.mail.body),
     },
     acts,
+    letter: normalizeLetter(src.letter),
   };
 }
 
@@ -267,7 +289,11 @@ function objectDetailBlock(o) {
   return `${head}\nРабочие: ${o.workers}, ИТР: ${o.itr}, машинисты: ${o.tech}. Итого ${peoplePhrase(o.sum)}.`;
 }
 
-export function composeLetter({ acts, isos, journal, shape = "detail", signName = "Рахматуллин Ренат" } = {}) {
+function fillTpl(template, ctx) {
+  return String(template || "").replace(/\{(name|dates|days|sign|date|sum|workers|itr|tech|objects|number|object)\}/g, (_, key) => String(ctx[key] ?? ""));
+}
+
+export function composeLetter({ acts, isos, journal, signName = "Рахматуллин Ренат", template } = {}) {
   const list = (Array.isArray(acts) ? acts : []).filter(Boolean);
   const dates = [...new Set((isos || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
   const days = [];
@@ -281,39 +307,39 @@ export function composeLetter({ acts, isos, journal, shape = "detail", signName 
     : dates.length > 1
       ? `${isoToRu(dates[0])}–${isoToRu(dates[dates.length - 1])}`
       : "";
-  const subject = `Численность${dateLabel ? " " + dateLabel : ""}${names.length ? " — " + names.join(", ") : ""}`;
-  const lines = ["Добрый день!", ""];
-  if (!list.length || !dates.length) {
-    lines.push("Нет данных для письма.");
-  } else if (shape === "short") {
-    lines.push(list.length === 1 ? `Численность по «${list[0].name || "объекту"}».` : "Численность.", "");
-    let lastAct = null;
-    for (const day of days) {
-      if (list.length > 1 && day.act !== lastAct) {
-        if (lastAct) lines.push("");
-        lines.push(day.act.name || "Фиксация");
-        lastAct = day.act;
-      }
-      lines.push(`${isoToRu(day.iso)} — ${peoplePhrase(day.totals.sum)}`);
+  const tpl = normalizeLetter(template);
+  const objectText = (o) => fillTpl(tpl.object, {
+    number: o.number || "",
+    object: o.name || "",
+    workers: o.workers,
+    itr: o.itr,
+    tech: o.tech,
+    sum: peoplePhrase(o.sum),
+  }).trim();
+  const dayText = (day) => fillTpl(tpl.day, {
+    date: isoToRu(day.iso),
+    sum: peoplePhrase(day.totals.sum),
+    workers: day.totals.workers,
+    itr: day.totals.itr,
+    tech: day.totals.tech,
+    objects: day.lines.map(objectText).filter(Boolean).join("\n\n"),
+  }).trim();
+  const chunks = [];
+  let lastAct = null;
+  for (const day of days) {
+    if (list.length > 1 && day.act !== lastAct) {
+      chunks.push(day.act.name || "Фиксация");
+      lastAct = day.act;
     }
-  } else {
-    let started = false;
-    let lastAct = null;
-    for (const day of days) {
-      if (list.length > 1 && day.act !== lastAct) {
-        lines.push(day.act.name || "Фиксация", "");
-        lastAct = day.act;
-      } else if (list.length === 1 && !started) {
-        lines.push(`Численность по «${list[0].name || "объекту"}».`, "");
-      }
-      started = true;
-      lines.push(`${isoToRu(day.iso)} — суммарно ${peoplePhrase(day.totals.sum)}`);
-      for (const o of day.lines) lines.push(objectDetailBlock(o), "");
-    }
+    const block = dayText(day);
+    if (block) chunks.push(block);
   }
-  if (dates.length > 1 || list.length > 1) lines.push("", `Суммарно за выбранные даты: ${peoplePhrase(grand)}.`);
-  lines.push("", "С уважением,", signName || "Рахматуллин Ренат");
-  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  const daysText = chunks.join("\n\n");
+  const ctx = { name: names.join(", "), dates: dateLabel, days: daysText, sign: signName || "Рахматуллин Ренат" };
+  const subject = fillTpl(tpl.subject, ctx).trim();
+  const text = (list.length && dates.length ? fillTpl(tpl.body, ctx) : "Нет данных для письма.")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim() + "\n";
   return {
     subject,
     text,
