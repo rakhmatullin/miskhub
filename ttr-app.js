@@ -11,8 +11,7 @@ import {
   parseList,
   peoplePhrase,
   todayISO,
-  weekdayIndex,
-} from "./ttr-core.js?v=9";
+} from "./ttr-core.js?v=10";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -737,22 +736,27 @@ function syncLetterActs() {
 function renderLetterDates() {
   const box = $("letter-dates");
   if (!box) return;
-  if (!letterDates.size) letterDates.add(todayISO());
   box.replaceChildren();
+  if (!letterDates.size) {
+    const note = document.createElement("p");
+    note.className = "hint dates-empty";
+    note.textContent = "Дат нет. Выбери нужные отдельно.";
+    box.appendChild(note);
+    return;
+  }
   for (const iso of [...letterDates].sort()) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "on";
     btn.dataset.date = iso;
     btn.textContent = isoToRu(iso) + " ×";
-    btn.title = "Убрать дату";
+    btn.title = "Убрать это число";
     box.appendChild(btn);
   }
 }
 
 function letterIsoList() {
-  const list = [...letterDates].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
-  return list.length ? list : [todayISO()];
+  return [...letterDates].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
 }
 
 function selectedLetterActs() {
@@ -784,24 +788,21 @@ function presetDates(kind) {
   const today = todayISO();
   if (kind === "today") return [today];
   if (kind === "yesterday") return [addDays(today, -1)];
-  if (kind === "week7") return Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
-  if (kind === "thisweek") {
-    const wd = weekdayIndex(today);
-    const monday = addDays(today, wd === 0 ? -6 : 1 - wd);
-    return rangeDays(monday, addDays(monday, 6));
-  }
-  return [today];
+  if (kind === "tomorrow") return [addDays(today, 1)];
+  if (kind === "after") return [addDays(today, 2)];
+  return [];
 }
 
 function setLetterDates(list, add) {
   if (!add) letterDates.clear();
   for (const iso of list) if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) letterDates.add(iso);
-  if (!letterDates.size) letterDates.add(todayISO());
   renderLetterDates();
   refreshLetter();
 }
 
 function buildLetter() {
+  const isos = letterIsoList();
+  if (!isos.length) return { subject: "", text: "", grand: 0, days: [] };
   return composeLetter({
     acts: selectedLetterActs(),
     isos: letterIsoList(),
@@ -824,7 +825,7 @@ function showLetterMeta(built) {
   const el = $("letter-meta");
   if (!el || !built) return;
   if (!built.days.length) {
-    el.textContent = "Выбери фиксацию и хотя бы одну дату.";
+    el.textContent = "Дат нет. Выбери нужные отдельно.";
     return;
   }
   const manyActs = new Set(built.days.map((d) => d.actId)).size > 1;
@@ -965,7 +966,6 @@ function bindLetter() {
     const btn = event.target.closest("[data-date]");
     if (!btn) return;
     letterDates.delete(btn.dataset.date);
-    if (!letterDates.size) letterDates.add(todayISO());
     renderLetterDates();
     refreshLetter(false);
   });
@@ -985,7 +985,7 @@ function bindLetter() {
     }
     setLetterDates([value], true);
   });
-  $("letter-clear-dates").addEventListener("click", () => setLetterDates([todayISO()], false));
+  $("letter-clear-dates").addEventListener("click", () => setLetterDates([], false));
   for (const input of document.querySelectorAll("input[name=letter-shape]")) {
     input.addEventListener("change", () => refreshLetter(false));
   }

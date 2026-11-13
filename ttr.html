@@ -77,7 +77,7 @@
     #letter-meta { color: #d7ecff; font-size: 15px; margin: 0 0 8px; line-height: 1.4; }
     .stack-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
     .stack-btns button, .choice button, .days button { min-height: 44px; }
-    .choice button { width: 100%; }
+    .dates-empty { margin: 4px 0 0; }
     .letter-text {
       min-height: 240px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -106,7 +106,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.3">
+<body data-page="ttr" data-version="2.4">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -114,7 +114,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.3</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.4</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -173,8 +173,8 @@
           <div class="choice" id="letter-presets">
             <button type="button" data-preset="today">Сегодня</button>
             <button type="button" data-preset="yesterday">Вчера</button>
-            <button type="button" data-preset="week7">7 дней</button>
-            <button type="button" data-preset="thisweek">Эта неделя</button>
+            <button type="button" data-preset="tomorrow">Завтра</button>
+            <button type="button" data-preset="after">Послезавтра</button>
           </div>
           <div id="letter-dates" class="days"></div>
           <div class="row2" style="margin-top:8px">
@@ -246,7 +246,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=9"></script>
+  <script type="module" src="./ttr-app.js?v=10"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>
