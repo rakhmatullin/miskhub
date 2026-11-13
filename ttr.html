@@ -107,7 +107,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.5">
+<body data-page="ttr" data-version="2.6">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -115,7 +115,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.5</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.6</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -177,7 +177,7 @@
             <button type="button" data-preset="tomorrow">Завтра</button>
             <button type="button" data-preset="after">Послезавтра</button>
           </div>
-          <div id="letter-dates" class="days"></div>
+          <div id="letter-dates" class="days" aria-label="Выбранные даты"></div>
           <div class="row2" style="margin-top:8px">
             <label class="field">С<input id="letter-from" type="date" /></label>
             <label class="field">По<input id="letter-to-date" type="date" /></label>
@@ -237,7 +237,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=11"></script>
+  <script type="module" src="./ttr-app.js?v=12"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>

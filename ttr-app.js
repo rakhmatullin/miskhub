@@ -743,7 +743,7 @@ function renderLetterDates() {
   if (!letterDates.size) {
     const note = document.createElement("p");
     note.className = "hint dates-empty";
-    note.textContent = "Дат нет. Выбери нужные отдельно.";
+    note.textContent = "Ничего не выбрано.";
     box.appendChild(note);
   } else {
     for (const iso of [...letterDates].sort()) {
@@ -751,12 +751,23 @@ function renderLetterDates() {
       btn.type = "button";
       btn.className = "on";
       btn.dataset.date = iso;
-      btn.textContent = isoToRu(iso) + " ×";
-      btn.title = "Убрать это число";
+      btn.textContent = dateChoiceLabel(iso) + " ×";
+      btn.title = "Убрать из выбранных";
       box.appendChild(btn);
     }
   }
   syncPresetHighlight();
+}
+
+function dateChoiceLabel(iso) {
+  const today = todayISO();
+  const name = {
+    [addDays(today, -1)]: "Вчера",
+    [today]: "Сегодня",
+    [addDays(today, 1)]: "Завтра",
+    [addDays(today, 2)]: "Послезавтра",
+  }[iso];
+  return name ? `${name} ${isoToRu(iso)}` : isoToRu(iso);
 }
 
 function syncPresetHighlight() {
@@ -769,7 +780,7 @@ function syncPresetHighlight() {
     after: addDays(today, 2),
   };
   for (const btn of document.querySelectorAll("#letter-presets [data-preset]")) {
-    const hit = isos.length === 1 && isos[0] === one[btn.dataset.preset];
+    const hit = isos.includes(one[btn.dataset.preset]);
     btn.classList.toggle("on", hit);
     btn.setAttribute("aria-pressed", hit ? "true" : "false");
   }
@@ -978,7 +989,7 @@ function bindLetter() {
   $("letter-presets").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-preset]");
     if (!btn) return;
-    setLetterDates(presetDates(btn.dataset.preset), false);
+    setLetterDates(presetDates(btn.dataset.preset), true);
   });
   $("letter-dates").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-date]");
