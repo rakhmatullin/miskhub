@@ -111,7 +111,8 @@ export const DEFAULT_LETTER = {
   greeting: "Добрый день!",
   header: "Численность по объекту «{name}»:",
   day: "{date} — {sum}\n{objects}",
-  object: "Проект {number}\n{object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}",
+  object: "Проект {number}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}",
+  legend: "Проект {number} — {object}",
   footer: "С уважением,\n\n{sign}",
   sign: DEFAULT_SIGN,
   body: "",
@@ -130,7 +131,8 @@ function normalizeLetter(raw) {
       subject: pick(src.subject, DEFAULT_LETTER.subject),
       body: String(src.body).replace(/\\n/g, "\n"),
       day: pick(src.day, DEFAULT_LETTER.day),
-      object: pick(src.object, DEFAULT_LETTER.object),
+      object: migrateObjectTemplate(pick(src.object, DEFAULT_LETTER.object)),
+      legend: pick(src.legend, DEFAULT_LETTER.legend),
       greeting: "",
       header: DEFAULT_LETTER.header,
       footer: "",
@@ -143,7 +145,8 @@ function normalizeLetter(raw) {
     greeting: pick(src.greeting, DEFAULT_LETTER.greeting),
     header: pick(src.header, DEFAULT_LETTER.header),
     day: pick(src.day, DEFAULT_LETTER.day),
-    object: pick(src.object, DEFAULT_LETTER.object),
+    object: migrateObjectTemplate(pick(src.object, DEFAULT_LETTER.object)),
+    legend: pick(src.legend, DEFAULT_LETTER.legend),
     footer: pick(src.footer, DEFAULT_LETTER.footer),
     sign: pick(src.sign, DEFAULT_LETTER.sign),
     body: "",
@@ -322,6 +325,12 @@ function objectDetailBlock(o) {
   return `${head}\nРабочие: ${o.workers}, ИТР: ${o.itr}, машинисты: ${o.tech}. Итого ${peoplePhrase(o.sum)}.`;
 }
 
+const PREVIOUS_OBJECT_TEMPLATE = "Проект {number}\n{object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}";
+
+function migrateObjectTemplate(text) {
+  return text === PREVIOUS_OBJECT_TEMPLATE ? DEFAULT_LETTER.object : text;
+}
+
 function fillTpl(template, ctx) {
   return String(template || "").replace(/\{(name|dates|days|sign|date|sum|workers|itr|tech|objects|number|object)\}/g, (_, key) => String(ctx[key] ?? ""));
 }
@@ -368,12 +377,24 @@ export function composeLetter({ acts, isos, journal, signName = "Рахмату�
     if (block) chunks.push(block);
   }
   const daysText = chunks.join("\n\n");
+  const seen = new Set();
+  const projectLines = [];
+  for (const day of days) {
+    for (const line of day.lines) {
+      const key = `${line.number}\0${line.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const row = fillTpl(tpl.legend, { number: line.number || "", object: line.name || "" }).trim();
+      if (row) projectLines.push(row);
+    }
+  }
+  const projectsText = projectLines.join("\n");
   const sign = String(tpl.sign || signName || "").trim();
   const ctx = { name: names.join(", "), dates: dateLabel, days: daysText, sign };
   const subject = fillTpl(tpl.subject, ctx).trim();
   let text = "";
   if (list.length && dates.length) {
-    const summary = [fillTpl(tpl.header, ctx).trim(), daysText].filter(Boolean).join("\n");
+    const summary = [fillTpl(tpl.header, ctx).trim(), daysText, projectsText].filter(Boolean).join("\n\n");
     if (tpl.legacy) {
       text = mode === "summary" ? summary : fillTpl(tpl.body, ctx);
     } else if (mode === "summary") {

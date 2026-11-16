@@ -11,7 +11,7 @@ import {
   parseList,
   peoplePhrase,
   todayISO,
-} from "./ttr-core.js?v=15";
+} from "./ttr-core.js?v=16";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -122,6 +122,7 @@ function readLetterTemplate() {
     header: value("letter-tpl-header"),
     day: value("letter-tpl-day"),
     object: value("letter-tpl-object"),
+    legend: value("letter-tpl-legend"),
     footer: value("letter-tpl-footer"),
     sign: value("letter-tpl-sign"),
   };
@@ -137,6 +138,7 @@ function writeLetterTemplate(letter) {
   set("letter-tpl-header", letter?.header);
   set("letter-tpl-day", letter?.day);
   set("letter-tpl-object", letter?.object);
+  set("letter-tpl-legend", letter?.legend);
   set("letter-tpl-footer", letter?.footer);
   set("letter-tpl-sign", letter?.sign);
 }
@@ -1075,7 +1077,7 @@ function bindLetter() {
     refreshLetter(true);
     msg("Черновик собран из шаблона.", "ok");
   });
-  for (const id of ["letter-tpl-subject", "letter-tpl-greeting", "letter-tpl-header", "letter-tpl-day", "letter-tpl-object", "letter-tpl-footer", "letter-tpl-sign"]) {
+  for (const id of ["letter-tpl-subject", "letter-tpl-greeting", "letter-tpl-header", "letter-tpl-day", "letter-tpl-object", "letter-tpl-legend", "letter-tpl-footer", "letter-tpl-sign"]) {
     $(id)?.addEventListener("input", () => refreshLetter(false));
   }
   $("letter-save-template").addEventListener("click", () => saveSettings().catch((err) => msg(err.message, "bad")));

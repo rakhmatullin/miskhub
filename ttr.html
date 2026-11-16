@@ -129,7 +129,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.9">
+<body data-page="ttr" data-version="2.10">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -137,7 +137,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.9</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.10</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -236,10 +236,12 @@
             <textarea id="letter-tpl-day" class="short">{date} — {sum}
 {objects}</textarea>
           </label>
-          <label class="field">Объект
+          <label class="field">Объект в дне
             <textarea id="letter-tpl-object" class="short">Проект {number}
-{object}
 Рабочие: {workers}, ИТР: {itr}, машинисты: {tech}</textarea>
+          </label>
+          <label class="field">Названия в конце
+            <textarea id="letter-tpl-legend" class="short">Проект {number} — {object}</textarea>
           </label>
           <label class="field">Подпись · только письмо
             <textarea id="letter-tpl-footer" class="short">С уважением,
@@ -255,7 +257,7 @@
 E-mail: rahmatullin.rr@mis-k.ru
 www.mis-k.ru</textarea>
           </label>
-          <p class="hint">Шапка: {name}. Число: {date} {sum} {workers} {itr} {tech} {objects}. Объект: {number} {object} {workers} {itr} {tech} {sum}. Подпись: {sign}. Тема: {name} {dates}.</p>
+          <p class="hint">В дне только шифр. Полное название один раз в конце. Шапка: {name}. Число: {date} {sum} {objects}. Объект: {number} {workers} {itr} {tech}. Название: {number} {object}.</p>
           <button type="button" id="letter-save-template">Сохранить шаблон</button>
         </details>
         <label class="field">Тема
@@ -304,7 +306,7 @@ www.mis-k.ru</textarea>
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=15"></script>
+  <script type="module" src="./ttr-app.js?v=16"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>
