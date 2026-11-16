@@ -73,5 +73,16 @@
         }
       ]
     }
-  ]
+  ],
+  "letter": {
+    "legacy": false,
+    "subject": "Акт фиксации трудовых ресурсов. {name}",
+    "greeting": "Добрый день!",
+    "header": "Численность по объекту «{name}»:",
+    "day": "{date} — {sum}\n{objects}",
+    "object": "Проект {number}\n{object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}",
+    "footer": "С уважением,\n\n{sign}",
+    "sign": "Рахматуллин Ренат Русланович\nВедущий инженер\nАО «МИСК»\n\nМоб.: +7 (996) 404-94-84\nE-mail: rahmatullin.rr@mis-k.ru\nwww.mis-k.ru",
+    "body": ""
+  }
 }
