@@ -92,6 +92,28 @@
       font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       color: #d5deef; background: #070d18; border-radius: 10px; padding: 10px; max-height: 240px; overflow: auto;
     }
+    #letter-presets {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      grid-template-columns: none;
+    }
+    #letter-presets button {
+      min-height: 32px; width: auto; padding: 4px 10px;
+      border-radius: 999px; font-size: 13px; line-height: 1.2;
+    }
+    .mode-switch {
+      display: inline-flex; gap: 2px; padding: 3px; margin: 8px 0 2px;
+      background: #09111e; border: 1px solid var(--line); border-radius: 999px;
+    }
+    .mode-switch button {
+      min-height: 32px; padding: 4px 12px; border: 0; border-radius: 999px;
+      background: transparent; color: var(--mute); font-size: 13px;
+    }
+    .mode-switch button.on { background: #1c4d86; color: #fff; }
+    .text-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px;
+    }
+    .text-head span { color: var(--mute); font-size: 12px; }
+    .text-head button { min-height: 32px; padding: 4px 12px; }
 
     @media (max-width: 900px) {
       .layout, .row3 { grid-template-columns: 1fr; }
@@ -107,7 +129,7 @@
     }
   </style>
 </head>
-<body data-page="ttr" data-version="2.8">
+<body data-page="ttr" data-version="2.9">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -115,7 +137,7 @@
   <main>
     <section class="hero">
       <p class="kicker">Каждый день · текст · почта Mail.ru</p>
-      <h1>Фиксация ТТР <span class="ver">v2.8</span></h1>
+      <h1>Фиксация ТТР <span class="ver">v2.9</span></h1>
       <p class="lead">Утреннее письмо уходит само. Отдельное можно собрать на любые даты, поправить и отправить своим адресатам. На каждое число пишется, сколько человек суммарно.</p>
     </section>
     <div id="msg"></div>
@@ -172,8 +194,9 @@
         </div>
         <div class="field">Даты
           <div class="choice" id="letter-presets">
-            <button type="button" data-preset="today">Сегодня</button>
+            <button type="button" data-preset="before">Позавчера</button>
             <button type="button" data-preset="yesterday">Вчера</button>
+            <button type="button" data-preset="today">Сегодня</button>
             <button type="button" data-preset="tomorrow">Завтра</button>
             <button type="button" data-preset="after">Послезавтра</button>
           </div>
@@ -193,40 +216,59 @@
         <p class="step-no">Шаг 2</p>
         <h2>Черновик</h2>
         <p class="hint" id="letter-meta"></p>
-        <details class="fold">
+        <div class="mode-switch" id="letter-mode" role="group" aria-label="Вид текста">
+          <button type="button" data-mode="letter" class="on" aria-pressed="true">Письмо</button>
+          <button type="button" data-mode="summary" aria-pressed="false">Сводка</button>
+        </div>
+        <p class="hint">Один шаблон на оба вида. Письмо добавляет приветствие и подпись, сводка — нет. Пустое поле шаблона вернётся к обычному тексту.</p>
+        <details class="fold" open>
           <summary>Шаблон</summary>
-          <p class="hint">Здесь переменные. Числа подставляются в черновик. Пустое поле вернётся к обычному тексту.</p>
           <label class="field">Тема
             <input id="letter-tpl-subject" type="text" value="Численность {dates} — {name}" />
           </label>
-          <label class="field">Письмо
-            <textarea id="letter-tpl-body" class="short">Добрый день!
-
-Численность по «{name}».
-
-{days}
-
-С уважением,
-{sign}</textarea>
+          <label class="field">Приветствие · только письмо
+            <input id="letter-tpl-greeting" type="text" value="Добрый день!" />
+          </label>
+          <label class="field">Шапка
+            <textarea id="letter-tpl-header" class="short">Численность по объекту «{name}»:</textarea>
           </label>
           <label class="field">Одно число
-            <textarea id="letter-tpl-day" class="short">{date} — суммарно {sum}
+            <textarea id="letter-tpl-day" class="short">{date} — {sum}
 {objects}</textarea>
           </label>
           <label class="field">Объект
-            <textarea id="letter-tpl-object" class="short">{number}. {object}
-Рабочие: {workers}, ИТР: {itr}, машинисты: {tech}. Итого {sum}.</textarea>
+            <textarea id="letter-tpl-object" class="short">Проект {number}
+{object}
+Рабочие: {workers}, ИТР: {itr}, машинисты: {tech}</textarea>
           </label>
-          <p class="hint">Письмо: {name} {dates} {days} {sign}. Число: {date} {sum} {workers} {itr} {tech} {objects}. Объект: {number} {object} {workers} {itr} {tech} {sum}. Суммы по всем дням нет.</p>
+          <label class="field">Подпись · только письмо
+            <textarea id="letter-tpl-footer" class="short">С уважением,
+
+{sign}</textarea>
+          </label>
+          <label class="field">Текст подписи
+            <textarea id="letter-tpl-sign" class="short">Рахматуллин Ренат Русланович
+Ведущий инженер
+АО «МИСК»
+
+Моб.: +7 (996) 404-94-84
+E-mail: rahmatullin.rr@mis-k.ru
+www.mis-k.ru</textarea>
+          </label>
+          <p class="hint">Шапка: {name}. Число: {date} {sum} {workers} {itr} {tech} {objects}. Объект: {number} {object} {workers} {itr} {tech} {sum}. Подпись: {sign}. Тема: {name} {dates}.</p>
           <button type="button" id="letter-save-template">Сохранить шаблон</button>
         </details>
         <label class="field">Тема
           <input id="letter-subject" type="text" />
         </label>
-        <label class="field">Текст
+        <div class="text-head">
+          <span>Текст</span>
+          <button type="button" id="letter-copy">Скопировать</button>
+        </div>
+        <label class="field">
           <textarea id="letter-text" class="letter-text" placeholder="Соберётся из шага 1"></textarea>
         </label>
-        <p class="hint" id="letter-dirty" hidden>Текст правился вручную. «Собрать заново» заменит его.</p>
+        <p class="hint" id="letter-dirty" hidden>Текст правился вручную. «Собрать заново» или переключатель вида заменит его.</p>
         <div class="toolbar">
           <button type="button" class="primary" id="letter-build">Собрать заново</button>
         </div>
@@ -245,11 +287,9 @@
           <button type="button" id="letter-use-acts">Подставить из фиксаций</button>
         </div>
         <div class="stack-btns">
-          <button type="button" id="letter-copy">Скопировать текст</button>
-          <button type="button" id="letter-mailto">Открыть в своей почте</button>
           <button type="button" class="primary" id="letter-send">Отправить с рабочей почты</button>
         </div>
-        <p class="hint">Своя почта откроет письмо на этом телефоне. Рабочая — ящик Mail.ru, как утренние фиксации. Уйдёт ровно текст черновика.</p>
+        <p class="hint">Уйдёт ровно текст черновика с ящика Mail.ru, как утренние фиксации.</p>
       </section>
     </div>
     <section class="panel" style="margin-top:16px">
@@ -264,7 +304,7 @@
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a></span>
     <a href="https://github.com/rakhmatullin/miskhub/tree/main/data/ttr">data/ttr</a>
   </footer>
-  <script type="module" src="./ttr-app.js?v=14"></script>
+  <script type="module" src="./ttr-app.js?v=15"></script>
   <script src="./hub-nav.js?v=13"></script>
 </body>
 </html>

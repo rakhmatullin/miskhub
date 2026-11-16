@@ -96,11 +96,25 @@ function normalizeAct(raw, idx = 0) {
   };
 }
 
+export const DEFAULT_SIGN = [
+  "Рахматуллин Ренат Русланович",
+  "Ведущий инженер",
+  "АО «МИСК»",
+  "",
+  "Моб.: +7 (996) 404-94-84",
+  "E-mail: rahmatullin.rr@mis-k.ru",
+  "www.mis-k.ru",
+].join("\n");
+
 export const DEFAULT_LETTER = {
   subject: "Численность {dates} — {name}",
-  body: "Добрый день!\n\nЧисленность по «{name}».\n\n{days}\n\nС уважением,\n{sign}",
-  day: "{date} — суммарно {sum}\n{objects}",
-  object: "{number}. {object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}. Итого {sum}.",
+  greeting: "Добрый день!",
+  header: "Численность по объекту «{name}»:",
+  day: "{date} — {sum}\n{objects}",
+  object: "Проект {number}\n{object}\nРабочие: {workers}, ИТР: {itr}, машинисты: {tech}",
+  footer: "С уважением,\n\n{sign}",
+  sign: DEFAULT_SIGN,
+  body: "",
 };
 
 function normalizeLetter(raw) {
@@ -109,11 +123,30 @@ function normalizeLetter(raw) {
     const text = String(value ?? "").replace(/\\n/g, "\n");
     return text.trim() ? text : fallback;
   };
+  const legacy = !("greeting" in src) && !("header" in src) && !("footer" in src) && String(src.body || "").trim();
+  if (legacy) {
+    return {
+      legacy: true,
+      subject: pick(src.subject, DEFAULT_LETTER.subject),
+      body: String(src.body).replace(/\\n/g, "\n"),
+      day: pick(src.day, DEFAULT_LETTER.day),
+      object: pick(src.object, DEFAULT_LETTER.object),
+      greeting: "",
+      header: DEFAULT_LETTER.header,
+      footer: "",
+      sign: pick(src.sign, DEFAULT_LETTER.sign),
+    };
+  }
   return {
+    legacy: false,
     subject: pick(src.subject, DEFAULT_LETTER.subject),
-    body: pick(src.body, DEFAULT_LETTER.body),
+    greeting: pick(src.greeting, DEFAULT_LETTER.greeting),
+    header: pick(src.header, DEFAULT_LETTER.header),
     day: pick(src.day, DEFAULT_LETTER.day),
     object: pick(src.object, DEFAULT_LETTER.object),
+    footer: pick(src.footer, DEFAULT_LETTER.footer),
+    sign: pick(src.sign, DEFAULT_LETTER.sign),
+    body: "",
   };
 }
 
@@ -293,7 +326,7 @@ function fillTpl(template, ctx) {
   return String(template || "").replace(/\{(name|dates|days|sign|date|sum|workers|itr|tech|objects|number|object)\}/g, (_, key) => String(ctx[key] ?? ""));
 }
 
-export function composeLetter({ acts, isos, journal, signName = "Рахматуллин Ренат", template } = {}) {
+export function composeLetter({ acts, isos, journal, signName = "Рахматуллин Ренат", template, mode = "letter" } = {}) {
   const list = (Array.isArray(acts) ? acts : []).filter(Boolean);
   const dates = [...new Set((isos || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
   const days = [];
@@ -322,7 +355,7 @@ export function composeLetter({ acts, isos, journal, signName = "Рахмату�
     workers: day.totals.workers,
     itr: day.totals.itr,
     tech: day.totals.tech,
-    objects: day.lines.map(objectText).filter(Boolean).join("\n\n"),
+    objects: day.lines.map(objectText).filter(Boolean).join("\n"),
   }).trim();
   const chunks = [];
   let lastAct = null;
@@ -335,11 +368,24 @@ export function composeLetter({ acts, isos, journal, signName = "Рахмату�
     if (block) chunks.push(block);
   }
   const daysText = chunks.join("\n\n");
-  const ctx = { name: names.join(", "), dates: dateLabel, days: daysText, sign: signName || "Рахматуллин Ренат" };
+  const sign = String(tpl.sign || signName || "").trim();
+  const ctx = { name: names.join(", "), dates: dateLabel, days: daysText, sign };
   const subject = fillTpl(tpl.subject, ctx).trim();
-  const text = (list.length && dates.length ? fillTpl(tpl.body, ctx) : "Нет данных для письма.")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim() + "\n";
+  let text = "";
+  if (list.length && dates.length) {
+    const summary = [fillTpl(tpl.header, ctx).trim(), daysText].filter(Boolean).join("\n");
+    if (tpl.legacy) {
+      text = mode === "summary" ? summary : fillTpl(tpl.body, ctx);
+    } else if (mode === "summary") {
+      text = summary;
+    } else {
+      const greeting = fillTpl(tpl.greeting, ctx).trim();
+      const footer = fillTpl(tpl.footer, ctx).trim();
+      text = [greeting, summary, footer].filter(Boolean).join("\n\n");
+    }
+    text = text.replace(/\n{3,}/g, "\n\n").trim();
+    if (text) text += "\n";
+  }
   return {
     subject,
     text,
@@ -356,7 +402,7 @@ export function composeLetter({ acts, isos, journal, signName = "Рахмату�
 }
 
 export function summaryText(act, isos, journal) {
-  return composeLetter({ acts: act ? [act] : [], isos, journal, shape: "detail" }).text;
+  return composeLetter({ acts: act ? [act] : [], isos, journal, mode: "summary" }).text;
 }
 
 export function fill(template, ctx) {

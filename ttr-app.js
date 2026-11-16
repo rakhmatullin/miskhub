@@ -11,7 +11,7 @@ import {
   parseList,
   peoplePhrase,
   todayISO,
-} from "./ttr-core.js?v=14";
+} from "./ttr-core.js?v=15";
 
 const REPO = "rakhmatullin/miskhub";
 const TOKEN_KEY = "miskhub.githubToken";
@@ -118,9 +118,12 @@ function readLetterTemplate() {
   const value = (id) => $(id)?.value ?? "";
   return {
     subject: value("letter-tpl-subject"),
-    body: value("letter-tpl-body"),
+    greeting: value("letter-tpl-greeting"),
+    header: value("letter-tpl-header"),
     day: value("letter-tpl-day"),
     object: value("letter-tpl-object"),
+    footer: value("letter-tpl-footer"),
+    sign: value("letter-tpl-sign"),
   };
 }
 
@@ -130,9 +133,12 @@ function writeLetterTemplate(letter) {
     if (el) el.value = String(text || "").replace(/\\n/g, "\n");
   };
   set("letter-tpl-subject", letter?.subject);
-  set("letter-tpl-body", letter?.body);
+  set("letter-tpl-greeting", letter?.greeting);
+  set("letter-tpl-header", letter?.header);
   set("letter-tpl-day", letter?.day);
   set("letter-tpl-object", letter?.object);
+  set("letter-tpl-footer", letter?.footer);
+  set("letter-tpl-sign", letter?.sign);
 }
 
 function dirty() {
@@ -734,6 +740,8 @@ async function pollJournal(actId, iso) {
 const letterDates = new Set([todayISO()]);
 let letterDirty = false;
 let recipientsTouched = false;
+const LETTER_MODE_KEY = "miskhub.letterMode";
+let letterMode = localStorage.getItem(LETTER_MODE_KEY) === "summary" ? "summary" : "letter";
 
 function syncLetterActs() {
   const box = $("letter-acts");
@@ -797,6 +805,7 @@ function syncRangeFields() {
 function dateChoiceLabel(iso) {
   const today = todayISO();
   const name = {
+    [addDays(today, -2)]: "Позавчера",
     [addDays(today, -1)]: "Вчера",
     [today]: "Сегодня",
     [addDays(today, 1)]: "Завтра",
@@ -809,8 +818,9 @@ function syncPresetHighlight() {
   const isos = letterIsoList();
   const today = todayISO();
   const one = {
-    today,
+    before: addDays(today, -2),
     yesterday: addDays(today, -1),
+    today,
     tomorrow: addDays(today, 1),
     after: addDays(today, 2),
   };
@@ -852,8 +862,9 @@ function rangeDays(from, to) {
 
 function presetDates(kind) {
   const today = todayISO();
-  if (kind === "today") return [today];
+  if (kind === "before") return [addDays(today, -2)];
   if (kind === "yesterday") return [addDays(today, -1)];
+  if (kind === "today") return [today];
   if (kind === "tomorrow") return [addDays(today, 1)];
   if (kind === "after") return [addDays(today, 2)];
   return [];
@@ -873,7 +884,7 @@ function buildLetter() {
     acts: selectedLetterActs(),
     isos: letterIsoList(),
     journal,
-    shape: letterShape(),
+    mode: letterMode,
     signName: $("from-name")?.value.trim() || "Рахматуллин Ренат",
     template: readLetterTemplate(),
   });
@@ -939,7 +950,7 @@ async function copyLetter() {
   const text = $("letter-text").value;
   try {
     await navigator.clipboard.writeText(text);
-    msg("Текст письма скопирован.", "ok");
+    msg(letterMode === "summary" ? "Сводка скопирована." : "Текст письма скопирован.", "ok");
   } catch {
     $("letter-text").focus();
     $("letter-text").select();
@@ -947,35 +958,9 @@ async function copyLetter() {
   }
 }
 
-function openLetterMail() {
-  ensureLetterText();
-  const to = parseList($("letter-to").value);
-  const cc = parseList($("letter-cc").value);
-  const subject = $("letter-subject").value.trim() || "Численность";
-  const body = $("letter-text").value;
-  if (!to.length) {
-    msg("Укажи, кому открыть письмо.", "bad");
-    $("letter-to").focus();
-    return;
-  }
-  const q = new URLSearchParams();
-  if (cc.length) q.set("cc", cc.join(","));
-  q.set("subject", subject);
-  const withBody = new URLSearchParams(q);
-  withBody.set("body", body);
-  const full = `mailto:${to.join(",")}?${withBody.toString()}`;
-  if (full.length > 1800) {
-    navigator.clipboard.writeText(body).catch(() => {});
-    window.location.href = `mailto:${to.join(",")}?${q.toString()}`;
-    msg("Текст длинный для окна почты — скопировал его. Вставь в письмо.", "info");
-    return;
-  }
-  window.location.href = full;
-}
-
 async function sendLetter() {
   if (!token()) {
-    msg("Чтобы отправить с рабочей почты, запомни токен GitHub. Или открой письмо в своей почте.", "bad");
+    msg("Чтобы отправить с рабочей почты, запомни токен GitHub.", "bad");
     return;
   }
   ensureLetterText();
@@ -1024,7 +1009,30 @@ function bindLetter() {
   $("letter-presets").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-preset]");
     if (!btn) return;
-    setLetterDates(presetDates(btn.dataset.preset), true);
+    const [iso] = presetDates(btn.dataset.preset);
+    if (!iso) return;
+    if (letterDates.has(iso)) letterDates.delete(iso);
+    else letterDates.add(iso);
+    renderLetterDates();
+    refreshLetter(false);
+  });
+  const modeBox = $("letter-mode");
+  const syncMode = () => {
+    if (!modeBox) return;
+    for (const btn of modeBox.querySelectorAll("[data-mode]")) {
+      const on = btn.dataset.mode === letterMode;
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  };
+  syncMode();
+  modeBox?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-mode]");
+    if (!btn || btn.dataset.mode === letterMode) return;
+    letterMode = btn.dataset.mode === "summary" ? "summary" : "letter";
+    localStorage.setItem(LETTER_MODE_KEY, letterMode);
+    syncMode();
+    refreshLetter(true);
   });
   $("letter-dates").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-date]");
@@ -1067,12 +1075,11 @@ function bindLetter() {
     refreshLetter(true);
     msg("Черновик собран из шаблона.", "ok");
   });
-  for (const id of ["letter-tpl-subject", "letter-tpl-body", "letter-tpl-day", "letter-tpl-object"]) {
-    $(id).addEventListener("input", () => refreshLetter(false));
+  for (const id of ["letter-tpl-subject", "letter-tpl-greeting", "letter-tpl-header", "letter-tpl-day", "letter-tpl-object", "letter-tpl-footer", "letter-tpl-sign"]) {
+    $(id)?.addEventListener("input", () => refreshLetter(false));
   }
   $("letter-save-template").addEventListener("click", () => saveSettings().catch((err) => msg(err.message, "bad")));
   $("letter-copy").addEventListener("click", () => copyLetter().catch((err) => msg(err.message, "bad")));
-  $("letter-mailto").addEventListener("click", openLetterMail);
   $("letter-send").addEventListener("click", () => sendLetter().catch((err) => msg(err.message, "bad")));
 }
 
