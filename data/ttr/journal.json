@@ -519,6 +519,49 @@
           "messageId": "<eb5be7ca-3811-df3a-c697-030cd65e6dbf@mis-k.ru>",
           "error": "",
           "attempts": 1
+        },
+        "2026-11-17": {
+          "objects": [
+            {
+              "number": "024-0210",
+              "name": "Этап 1.1.1 Участок от 7-ой Кожуховской улицы до Проектируемого проезда №35",
+              "workers": 5,
+              "itr": 1,
+              "tech": 1,
+              "sum": 7,
+              "locked": true,
+              "status": "sent",
+              "note": ""
+            },
+            {
+              "number": "026-0577",
+              "name": "Этап 1.1.2 ОРП со зданием конечной станции",
+              "workers": 5,
+              "itr": 1,
+              "tech": 1,
+              "sum": 7,
+              "locked": true,
+              "status": "sent",
+              "note": ""
+            }
+          ],
+          "workers": 10,
+          "itr": 2,
+          "tech": 2,
+          "sum": 14,
+          "locked": true,
+          "status": "sent",
+          "sentAt": "2026-11-17T07:11:46.615Z",
+          "to": [
+            "rahmatullin.rr@mis-k.ru"
+          ],
+          "cc": [
+            "renrahman@gmail.com"
+          ],
+          "filename": "Фиксация ТТР 17.11.2026 — Люблинка",
+          "messageId": "<a27d4c52-c3d2-a3e0-4ea9-f336b2d9ab74@mis-k.ru>",
+          "error": "",
+          "attempts": 1
         }
       }
     }
