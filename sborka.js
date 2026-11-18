@@ -1,4 +1,4 @@
-/* v2.7 */
+/* v2.8 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -1047,24 +1047,42 @@ function wireSlots() {
     el.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const [n, slot] = el.dataset.pick.split(":");
-      const inp = $("photoIn");
-      inp.dataset.n = n;
-      inp.dataset.slot = slot;
-      inp.value = "";
-      inp.click();
+      armPhotoPick(n, slot);
     });
   });
+}
+let photoTarget = null;
+function armPhotoPick(n, slot) {
+  const num = Number(n);
+  const sl = Number(slot);
+  if (!Number.isFinite(num) || !Number.isFinite(sl)) return;
+  photoTarget = { n: num, slot: sl };
+  const inp = $("photoIn");
+  inp.dataset.n = String(num);
+  inp.dataset.slot = String(sl);
+  inp.value = "";
+  inp.click();
 }
 $("photoIn").addEventListener("change", async () => {
   const file = $("photoIn").files && $("photoIn").files[0];
   if (!file) return;
-  const n = Number($("photoIn").dataset.n);
-  const slot = Number($("photoIn").dataset.slot);
+  const target = photoTarget || {
+    n: Number($("photoIn").dataset.n),
+    slot: Number($("photoIn").dataset.slot),
+  };
+  const n = target.n;
+  const slot = target.slot;
+  photoTarget = null;
+  if (!Number.isFinite(n) || !Number.isFinite(slot)) {
+    $("hint").textContent = "";
+    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">Не понял, какое фото заменять.</div>');
+    return;
+  }
   $("hint").textContent = "Сохраняю фото…";
   try {
     await savePhoto(n, slot, file);
-    render(await lookup(n));
-    wireSlots();
+    const shown = expandNumbers(($("num").value || "").trim());
+    if (shown.length === 1 && shown[0] === n) render(await lookup(n));
     await renderOpen();
     $("hint").textContent = "Фото сохранено: " + n + "_" + slot + ".jpg";
   } catch (e) {
@@ -1083,13 +1101,11 @@ document.addEventListener("click", (e) => {
   overlay.style.cssText = "position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center";
   overlay.innerHTML = '<img src="' + url + '" style="max-width:96%;max-height:96%;object-fit:contain"><div style="position:absolute;top:12px;right:12px;display:flex;gap:6px"><button id="fs-replace" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Заменить</button><button id="fs-close" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Закрыть</button></div>';
   overlay.querySelector("#fs-close").onclick = () => overlay.remove();
-  overlay.querySelector("#fs-replace").onclick = () => {
+  overlay.querySelector("#fs-replace").onclick = (ev) => {
+    ev.stopPropagation();
+    const [n, slot] = String(pick).split(":");
     overlay.remove();
-    if (pick) {
-      const inp = $("photoIn");
-      inp.dataset.pick = pick;
-      inp.click();
-    }
+    armPhotoPick(n, slot);
   };
   overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
   const onEsc = (e) => { if (e.key === "Escape") close(); };
