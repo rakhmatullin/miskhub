@@ -3,15 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
 import {
+  composeLetter,
   dayBreakdown,
   ensureJournal,
   filenameFor,
-  fill,
   isoToRu,
   minutesOf,
   moscowMinutesNow,
   normalizeSettings,
-  objectsLetterBlock,
   summaryText,
   todayISO,
   weekdayIndex,
@@ -148,21 +147,21 @@ async function sendOne(act, dayIso) {
   const day = jact.days[dayIso] || {};
   const breakdown = dayBreakdown(act, dayIso, journal);
   const total = breakdown.totals;
-  const objectsText = objectsLetterBlock(breakdown.lines, total);
-  const ctx = {
-    date: isoToRu(dayIso),
-    name: act.name,
-    workers: total.workers,
-    itr: total.itr,
-    tech: total.tech,
-    sum: total.sum,
-    objects: objectsText,
-    filename: filenameFor(dayIso, act.name),
-  };
   const filename = filenameFor(dayIso, act.name);
 
+  // Новый формат письма из шаблонов settings.letter (composeLetter)
+  const letterResult = composeLetter({
+    acts: [act],
+    isos: [dayIso],
+    journal,
+    template: settings.letter,
+    mode: "letter",
+  });
+  const subject = letterResult.subject || ` Численность ${isoToRu(dayIso)} — ${act.name || ""}`;
+  const text = letterResult.text || "";
+
   if (dry) {
-    console.log(JSON.stringify({ iso: dayIso, act: act.id, total, filename, subject: fill(act.subject || settings.mail.subject, ctx), text: plainText(fill(act.body || settings.mail.body, ctx)) }));
+    console.log(JSON.stringify({ iso: dayIso, act: act.id, total, filename, subject, text }));
     return;
   }
 
@@ -211,8 +210,6 @@ async function sendOne(act, dayIso) {
   const from = settings.mail.fromName
     ? `"${settings.mail.fromName.replace(/"/g, "")}" <${settings.mail.from}>`
     : settings.mail.from;
-  const subject = fill(act.subject || settings.mail.subject, ctx);
-  const text = plainText(fill(act.body || settings.mail.body, ctx));
 
   try {
     const transport = nodemailer.createTransport({
