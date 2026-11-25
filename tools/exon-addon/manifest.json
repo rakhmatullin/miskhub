@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Экзон — надстройка",
+  "version": "0.1.0",
+  "description": "Открывает официальный вход Экзона и сохраняет HTML открытой рабочей страницы.",
+  "action": {
+    "default_title": "Надстройка Экзона",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://exon.exonproject.ru/*"],
+      "exclude_matches": [
+        "https://exon.exonproject.ru/auth",
+        "https://exon.exonproject.ru/auth/*",
+        "https://exon.exonproject.ru/callback",
+        "https://exon.exonproject.ru/callback/*"
+      ],
+      "js": ["snapshot.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

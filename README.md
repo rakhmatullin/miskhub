@@ -9,6 +9,7 @@
 - Сверка весов: https://rakhmatullin.github.io/miskhub/sverka-vesov.html
 - Фиксация ТТР: https://rakhmatullin.github.io/miskhub/ttr.html
 - PDF Master: https://rakhmatullin.github.io/miskhub/pdf-master.html
+- Экзон: https://rakhmatullin.github.io/miskhub/exon.html
 
 ## Сборка актов
 
@@ -21,3 +22,10 @@
 ## PDF Master
 
 Склейка PDF в браузере: исходники отдельно, готовые файлы отдельно. Страницы выбираются у каждого куска, файлы клеятся слева или справа в один PDF.
+
+
+## Экзон
+
+[Страница инструмента](./exon.html) открывает официальный вход и предлагает расширение Chrome и Edge для сохранения HTML открытой рабочей страницы. Логин и пароль вводятся на сайте Экзона. Исходники и тест находятся в [tools/exon-addon](./tools/exon-addon/README.md).
+
+При выпуске новой версии обновите версию в манифесте и на странице, добавьте ZIP с новым номером в `assets` и обновите ссылку скачивания. Предыдущий архив остаётся доступен по его адресу.
