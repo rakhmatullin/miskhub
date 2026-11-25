@@ -1,0 +1,6 @@
+[hidden] { display: none !important; }
+.version-switch { display: inline-flex; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 2px; margin-left: auto; }
+.version-switch > * { border-radius: 7px; padding: 4px 9px; font-size: 13px; }
+.version-switch a { color: var(--mute); text-decoration: none; }
+.version-switch a:hover { color: var(--text); text-decoration: underline; }
+.version-switch [aria-current] { background: #183050; font-weight: 600; }

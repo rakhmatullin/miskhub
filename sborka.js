@@ -1,4 +1,4 @@
-/* v2.8 */
+/* v2.9 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -69,9 +69,9 @@ function parseDump(buf) {
   }
   return rows;
 }
-async function listEntries() {
+async function listEntries(folder = dirHandle) {
   const out = [];
-  for await (const [name, handle] of dirHandle.entries()) if (handle.kind === "file") out.push({ name, handle });
+  for await (const [name, handle] of folder.entries()) if (handle.kind === "file") out.push({ name, handle });
   return out;
 }
 async function fileByName(entries, name) {
@@ -91,9 +91,6 @@ async function findDumpFile(entries) {
   }
   if (!docs.length) return null;
   docs.sort((a, b) => b.mtime - a.mtime);
-  for (const d of docs.slice(1)) {
-    try { await dirHandle.removeEntry(d.entry.name); } catch (_) {}
-  }
   return docs[0].file;
 }
 function findPhotoEntry(entries, n, slot) {
@@ -112,13 +109,6 @@ async function embeddedTemplate() {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
-}
-async function refreshFiles() {
-  if (!dirHandle) { $("files").innerHTML = ""; return; }
-  const entries = await listEntries();
-  const dump = await findDumpFile(entries);
-  $("files").innerHTML = "";
-  $("num").disabled = !dump;
 }
 async function lookup(n) {
   const entries = await listEntries();
@@ -149,178 +139,177 @@ async function lookup(n) {
 }
 
 const COMMENTS_FILE = "комментарии.json";
-let comments = {};
-let openRows = [];
-let sortDesc = true;
-let dumpDate = "";
-
-async function loadComments() {
-  comments = {};
-  if (!dirHandle) return;
-  try {
-    const entries = await listEntries();
-    const f = await fileByName(entries, COMMENTS_FILE);
-    if (!f) return;
-    comments = JSON.parse(await f.text()) || {};
-  } catch (_) { comments = {}; }
-}
-async function saveComments() {
-  if (!dirHandle) return;
-  const fh = await dirHandle.getFileHandle(COMMENTS_FILE, { create: true });
-  const w = await fh.createWritable();
-  await w.write(new Blob([JSON.stringify(comments, null, 2)], { type: "application/json" }));
-  await w.close();
-}
-
 const INT_MAP_FILE = "интеграционные.json";
-let intMap = {};
+const COL_FILE = "названия_комментариев.json";
+const SEQ_FILE = "последовательности_актов.json";
+const defaultColumns = {c1: "Комментарий", c2: "Примечание"};
+let comments = {}, intMap = {}, colNames = {...defaultColumns};
+let sequences = {open: [], closed: [], new: []}, openRows = [], dumpDate = "", sortDesc = true;
 
-async function loadIntMap() {
-  intMap = {};
-  if (!dirHandle) return;
-  try {
-    const entries = await listEntries();
-    const f = await fileByName(entries, INT_MAP_FILE);
-    if (!f) return;
-    intMap = JSON.parse(await f.text()) || {};
-  } catch (_) { intMap = {}; }
-}
-async function saveIntMap() {
-  if (!dirHandle) return;
-  const fh = await dirHandle.getFileHandle(INT_MAP_FILE, { create: true });
-  const w = await fh.createWritable();
-  await w.write(new Blob([JSON.stringify(intMap, null, 2)], { type: "application/json" }));
-  await w.close();
+function dictionary(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-
-let commentTimers = {};
-function scheduleComment(n, field, value) {
-  const key = String(n);
-  if (!comments[key] || typeof comments[key] !== "object") {
-    comments[key] = { c1: (typeof comments[key] === "string" ? comments[key] : ""), c2: "" };
+function validLegacy(name, data) {
+  if (!dictionary(data) || Object.hasOwn(data, "schemaVersion")) return false;
+  if (name === SEQ_FILE) {
+    return ["open", "closed", "new"].every(key => Array.isArray(data[key]) && data[key].every(Number.isSafeInteger));
   }
-  comments[key][field || "c1"] = value;
-  clearTimeout(commentTimers[key + (field || "c1")]);
-  commentTimers[key + (field || "c1")] = setTimeout(() => saveComments().catch(() => {}), 400);
+  const validColumns = item => ["c1", "c2"].every(key => !Object.hasOwn(item, key) || typeof item[key] === "string");
+  if (name === COL_FILE) return validColumns(data);
+  return Object.entries(data).every(([key, item]) => {
+    if (!/^-?\d+$/.test(key)) return true;
+    if (name === INT_MAP_FILE) return typeof item === "string" || typeof item === "number";
+    return typeof item === "string" || (dictionary(item) && validColumns(item));
+  });
 }
-async function savePhoto(n, slot, file) {
+
+async function readLegacy(dir, name) {
+  try {
+    const matches = (await listEntries(dir)).filter(entry => entry.name.toLowerCase() === name);
+    if (matches.length > 1) throw new Error("Неоднозначное имя файла.");
+    const handle = matches[0]?.handle;
+    if (!handle) return {data: {}};
+    const data = JSON.parse(await (await handle.getFile()).text());
+    if (!validLegacy(name, data)) throw new Error("Неизвестная структура или версия данных.");
+    return {handle, data};
+  } catch (error) {
+    throw new Error("Не удалось прочитать «" + name + "». " + error.message + " Восстановите файл из резервной копии и повторите открытие.");
+  }
+}
+
+function readLegacyFolder(dir) {
+  return navigator.locks.request("miskhub-legacy-json", async () => {
+    const files = await Promise.all([COMMENTS_FILE, INT_MAP_FILE, COL_FILE, SEQ_FILE].map(name => readLegacy(dir, name)));
+    return {comments: files[0].data, intMap: files[1].data, colNames: {...defaultColumns, ...files[2].data},
+      sequences: files[3].handle ? files[3].data : {open: [], closed: [], new: []}};
+  });
+}
+
+function editLegacy(dir, name, edit) {
+  return navigator.locks.request("miskhub-legacy-json", async () => {
+    const {handle, data} = await readLegacy(dir, name);
+    const previous = JSON.stringify(data);
+    edit(data);
+    if (JSON.stringify(data) !== previous) {
+      const file = handle || await dir.getFileHandle(name, {create: true});
+      const writer = await file.createWritable();
+      try {
+        await writer.write(JSON.stringify(data, null, 2));
+        await writer.close();
+      } catch (error) {
+        await writer.abort().catch(() => {});
+        throw error;
+      }
+    }
+    return data;
+  });
+}
+
+// Merge queued edits into the latest valid disk data. The captured directory
+// remains the write destination if the user switches folders in the meantime.
+const pendingEdits = new WeakMap();
+let legacyWrites = 0;
+function queueLegacyEdit(dir, name, key, edit) {
+  let files = pendingEdits.get(dir);
+  if (!files) pendingEdits.set(dir, files = new Map());
+  let edits = files.get(name);
+  if (!edits) {
+    files.set(name, edits = new Map());
+    legacyWrites++;
+    editLegacy(dir, name, data => {
+      files.delete(name);
+      for (const change of edits.values()) change(data);
+    }).catch(error => {
+      if (files.get(name) === edits) files.delete(name);
+      if (dir === dirHandle) $("hint").textContent = "Не сохранён файл «" + name + "». " + error.message;
+    }).finally(() => legacyWrites--);
+  }
+  edits.set(key, edit);
+}
+
+function scheduleComment(n, field, value) {
+  if (!dirHandle) return;
+  const edit = data => {
+    if (!dictionary(data[n])) data[n] = {c1: data[n] || "", c2: ""};
+    data[n][field] = value;
+  };
+  edit(comments);
+  queueLegacyEdit(dirHandle, COMMENTS_FILE, n + "/" + field, edit);
+}
+
+function updateColName(field, value) {
+  if (!dirHandle) return;
+  colNames[field] = value;
+  queueLegacyEdit(dirHandle, COL_FILE, field, data => {
+    for (const key of Object.keys(defaultColumns)) data[key] ??= defaultColumns[key];
+    data[field] = value;
+  });
+}
+
+function reconcileSequences(data, current) {
+  if (!data.open) Object.assign(data, {open: [], closed: [], new: []});
+  if (!data.open.length && !data.closed.length && !data.new.length) {
+    data.open = [...current];
+    return;
+  }
+  const currentSet = new Set(current);
+  data.closed.push(...data.open.filter(n => !currentSet.has(n)));
+  data.open = data.open.filter(n => currentSet.has(n));
+  const openSet = new Set(data.open);
+  for (const n of current) {
+    if (!openSet.has(n)) {
+      data.open.push(n);
+      data.new.push(n);
+      openSet.add(n);
+    }
+  }
+}
+
+async function readOpenDump(dir) {
+  const file = await findDumpFile(await listEntries(dir));
+  if (!file) return {date: "", rows: []};
+  const rows = parseDump(await file.arrayBuffer()).filter(row => row.status === "К устранению");
+  const date = new Date(file.lastModified);
+  return {date: pad(date.getDate()) + "." + pad(date.getMonth() + 1) + "." + date.getFullYear(), rows};
+}
+
+async function loadWorkspace(dir, legacy, dump) {
+  const savedSequences = dump.date
+    ? await editLegacy(dir, SEQ_FILE, data => reconcileSequences(data, dump.rows.map(row => row.act_no)))
+    : legacy.sequences;
+  ({comments, intMap, colNames} = legacy);
+  for (const row of dump.rows) row.integration = intMap[row.act_no] || row.integration;
+  sequences = savedSequences;
+  openRows = dump.rows;
+  dumpDate = dump.date;
+  dirHandle = dir;
+}
+async function savePhoto(n, slot, file, folder) {
+  if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
   const jpeg = await toJpeg(file);
   const name = n + "_" + slot + ".jpg";
-  const entries = await listEntries();
-  const old = findPhotoEntry(entries, n, slot);
-  if (old && old.name !== name) {
-    try { await dirHandle.removeEntry(old.name); } catch (_) {}
+  const old = findPhotoEntry(await listEntries(folder), n, slot);
+  const fh = await folder.getFileHandle(name, { create: true });
+  const writer = await fh.createWritable();
+  try {
+    await writer.write(jpeg.bytes);
+    await writer.close();
+  } catch (error) {
+    await writer.abort().catch(() => {});
+    throw error;
   }
-  const fh = await dirHandle.getFileHandle(name, { create: true });
-  const w = await fh.createWritable();
-  await w.write(jpeg.bytes);
-  await w.close();
+  if (old && old.name !== name) await folder.removeEntry(old.name);
 }
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-const SEQ_FILE = "последовательности_актов.json";
-let sequences = { open: [], closed: [], new: [] };
-
-async function loadSequences() {
-  sequences = { open: [], closed: [], new: [] };
-  if (!dirHandle) return;
-  try {
-    const entries = await listEntries();
-    const f = await fileByName(entries, SEQ_FILE);
-    if (!f) return;
-    const data = JSON.parse(await f.text()) || {};
-    sequences.open = Array.isArray(data.open) ? data.open : [];
-    sequences.closed = Array.isArray(data.closed) ? data.closed : [];
-    sequences.new = Array.isArray(data.new) ? data.new : [];
-  } catch (_) { sequences = { open: [], closed: [], new: [] }; }
-}
-
-async function saveSequences() {
-  if (!dirHandle) return;
-  const payload = {
-    _comment: "Файл последовательностей актов для нейронки и человека. open — текущие незакрытые номера в порядке первого появления. closed — закрытые в порядке закрытия. new — новые в порядке появления. Логика: при загрузке выгрузки номера, исчезнувшие из open, переносятся в closed; новые из выгрузки добавляются в open и new. Не править вручную без понимания.",
-    open: sequences.open,
-    closed: sequences.closed,
-    new: sequences.new
-  };
-  const fh = await dirHandle.getFileHandle(SEQ_FILE, { create: true });
-  const w = await fh.createWritable();
-  await w.write(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
-  await w.close();
-}
-
-async function updateSequences() {
-  await loadSequences();
-  const current = openRows.map(r => r.act_no);
-  const currentSet = new Set(current);
-  if (sequences.open.length === 0 && sequences.closed.length === 0 && sequences.new.length === 0) {
-    sequences.open = [...current];
-    sequences.closed = [];
-    sequences.new = [];
-  } else {
-    // numbers in open that disappeared from dump → move to closed
-    const stillOpen = [];
-    for (const n of sequences.open) {
-      if (currentSet.has(n)) stillOpen.push(n);
-      else sequences.closed.push(n);
-    }
-    sequences.open = stillOpen;
-    // numbers in dump not in open → add to open and new
-    const openSet = new Set(sequences.open);
-    for (const n of current) {
-      if (!openSet.has(n)) {
-        sequences.open.push(n);
-        sequences.new.push(n);
-        openSet.add(n);
-      }
-    }
-  }
-  await saveSequences();
-}
-
-async function loadOpen() {
-  openRows = []; dumpDate = "";
-  if (!dirHandle) return;
-  const entries = await listEntries();
-  const dump = await findDumpFile(entries);
-  if (!dump) return;
-  dumpDate = todayStrFrom(dump.lastModified);
-  try { openRows = parseDump(await dump.arrayBuffer()).filter((r) => r.status === "К устранению"); }
-  catch (_) { openRows = []; }
-  await loadComments();
-  await loadColNames();
-  await loadIntMap();
-  openRows.forEach(r => { if (intMap[String(r.act_no)]) r.integration = intMap[String(r.act_no)]; });
-  await updateSequences();
-}
-function todayStrFrom(ms) {
-  const d = new Date(ms);
-  return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
-}
-
-let colNames = { c1: "Комментарий", c2: "Примечание" };
-async function loadColNames() {
-  if (!dirHandle) return;
-  try {
-    const entries = await listEntries();
-    const f = await fileByName(entries, "названия_комментариев.json");
-    if (f) Object.assign(colNames, JSON.parse(await f.text()) || {});
-  } catch (_) {}
-}
-async function saveColNames() {
-  if (!dirHandle) return;
-  try {
-    const fh = await dirHandle.getFileHandle("названия_комментариев.json", { create: true });
-    const w = await fh.createWritable();
-    await w.write(new Blob([JSON.stringify(colNames)], { type: "application/json" }));
-    await w.close();
-  } catch (_) {}
-}
+let renderVersion = 0;
 async function renderOpen() {
+  const version = ++renderVersion;
+  const folder = dirHandle;
   const host = $("open");
   if (!host) return;
   if (!dirHandle) { host.innerHTML = ""; return; }
@@ -330,11 +319,11 @@ async function renderOpen() {
     return;
   }
   const sorted = [...openRows].sort((a, b) => sortDesc ? b.act_no - a.act_no : a.act_no - b.act_no);
+  const entries = await listEntries(folder);
   let rows = "";
   for (const r of sorted) {
     const raw = comments[String(r.act_no)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
-    const entries = await listEntries();
     const before = findPhotoEntry(entries, r.act_no, 1);
     const after = findPhotoEntry(entries, r.act_no, 2);
     const beforeUrl = before ? URL.createObjectURL(await before.handle.getFile()) : "";
@@ -343,7 +332,7 @@ async function renderOpen() {
       (beforeUrl ? '<img src="' + beforeUrl + '" data-full="' + beforeUrl + '" data-pick="' + r.act_no + ':1" title="ДО">' : '<div class="ph" data-pick="' + r.act_no + ':1">+</div>') +
       (afterUrl ? '<img src="' + afterUrl + '" data-full="' + afterUrl + '" data-pick="' + r.act_no + ':2" title="ПОСЛЕ">' : '<div class="ph" data-pick="' + r.act_no + ':2">+</div>') +
       '</div>';
-    rows += "<tr>" +
+    rows += '<tr data-remark="' + r.act_no + '">' +
       '<td><input type="checkbox" class="row-sel" data-n="' + r.act_no + '"></td>' +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
       '<td>' + esc(r.integration || "—") + "</td>" +
@@ -351,30 +340,25 @@ async function renderOpen() {
       "<td>" + esc(r.deadline || "—") + "</td>" +
       '<td class="desc">' + esc(r.description || "—") + "</td>" +
       '<td>' + mini + '</td>' +
+      '<td><button type="button" data-resp="' + r.act_no + '">Не назначен</button></td>' +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
       "</tr>";
   }
+  if (folder !== dirHandle || version !== renderVersion) return;
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    '<table class="table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Фото</th>' +
+    RemarksUI.toolbar + '<div class="remarks-scroll"><table class="table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Фото</th><th>Ответственный</th>' +
     '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '</tr></thead><tbody>' +
-    rows + "</tbody></table></section>";
+    rows + '</tbody></table></div><p id="respNoRows" hidden>По фильтру замечаний нет.</p></section>';
   host.querySelectorAll("[data-cmt]").forEach((el) => {
     el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.dataset.field || "c1", el.value));
   });
-  host.querySelectorAll(".colname").forEach((el) => {
-    el.addEventListener("change", () => {
-      colNames[el.dataset.col] = el.value;
-      saveColNames().catch(() => {});
-    });
-    el.addEventListener("blur", () => {
-      colNames[el.dataset.col] = el.value;
-      saveColNames().catch(() => {});
-    });
+  host.querySelectorAll(".colname").forEach(el => {
+    el.addEventListener("change", () => updateColName(el.dataset.col, el.value));
   });
   host.querySelectorAll("[data-go]").forEach((el) => {
     el.addEventListener("click", () => {
@@ -393,11 +377,11 @@ async function renderOpen() {
   host.insertAdjacentHTML("beforeend", seqHtml);
   wireSlots();
   const sortBtn = host.querySelector("#sortBtn");
-  if (sortBtn) sortBtn.addEventListener("click", () => { sortDesc = !sortDesc; renderOpen(); });
+  if (sortBtn) sortBtn.addEventListener("click", () => { sortDesc = !sortDesc; sortBtn.textContent = sortDesc ? "↓" : "↑"; RemarksUI.updateTable(); });
 
   // Чекбоксы ↔ поле номеров
   function syncFromChecks() {
-    const selected = [...host.querySelectorAll(".row-sel:checked")].map(el => el.dataset.n);
+    const selected = [...host.querySelectorAll("tr:not([hidden]) .row-sel:checked")].map(el => el.dataset.n);
     const num = $("num");
     if (num) {
       num.value = selected.join(" ");
@@ -410,7 +394,7 @@ async function renderOpen() {
   const selAll = host.querySelector("#selAll");
   if (selAll) {
     selAll.addEventListener("change", () => {
-      host.querySelectorAll(".row-sel").forEach(el => { el.checked = selAll.checked; });
+      host.querySelectorAll("tr:not([hidden]) .row-sel").forEach(el => { el.checked = selAll.checked; });
       syncFromChecks();
     });
   }
@@ -418,13 +402,13 @@ async function renderOpen() {
   const current = expandNumbers(($("num") && $("num").value) || "");
   const set = new Set(current.map(String));
   host.querySelectorAll(".row-sel").forEach(el => { el.checked = set.has(el.dataset.n); });
-  if (selAll) selAll.checked = host.querySelectorAll(".row-sel").length > 0 && host.querySelectorAll(".row-sel:not(:checked)").length === 0;
+  RemarksUI.refresh();
 }
 
 function render(d) {
   if (!d.ok) {
     ready = false; $("go").disabled = true; $("hint").textContent = "";
-    $("out").innerHTML = '<div class="msg bad">' + d.error + "</div>";
+    $("out").innerHTML = '<div class="msg bad">' + esc(d.error) + "</div>";
     return;
   }
   ready = d.can_build;
@@ -434,12 +418,12 @@ function render(d) {
   $("out").innerHTML =
     '<section class="tape-wrap"><div class="meta">' +
     '<div><span class="k">Номер</span>' + a.act_no + "</div>" +
-    '<div><span class="k">Инт.номер</span>' + (a.integration || "—") + "</div>" +
-    '<div><span class="k">Статус</span>' + (a.status || "—") + "</div>" +
-    '<div><span class="k">Дата предписания</span>' + (a.pred_date || "—") + "</div>" +
-    '<div><span class="k">Срок</span>' + (a.deadline || "—") + "</div>" +
+    '<div><span class="k">Инт.номер</span>' + esc(a.integration || "—") + "</div>" +
+    '<div><span class="k">Статус</span>' + esc(a.status || "—") + "</div>" +
+    '<div><span class="k">Дата предписания</span>' + esc(a.pred_date || "—") + "</div>" +
+    '<div><span class="k">Срок</span>' + esc(a.deadline || "—") + "</div>" +
     '<div><span class="k">Дата акта</span>' + d.act_date + "</div>" +
-    '<div><span class="k">Замечание</span>' + (a.description || "—") + "</div></div></section>" +
+    '<div><span class="k">Замечание</span>' + esc(a.description || "—") + "</div></div></section>" +
     '<section class="tape-wrap"><div class="photos">' +
     slotHtml(a.act_no, 1, "до", d.before, d.beforeUrl) +
     slotHtml(a.act_no, 2, "после", d.after, d.afterUrl) +
@@ -453,7 +437,7 @@ function slotHtml(n, slot, label, name, url) {
   const chgBtn = '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">' + (url ? "Заменить" : "Добавить") + '</button>';
   return '<figure class="slot">' + img +
     '<div class="btns">' + chgBtn + '</div>' +
-    '<figcaption class="kicker">' + label + " · " + (name || "нет " + n + "_" + slot) + "</figcaption></figure>";
+    '<figcaption class="kicker">' + label + " · " + esc(name || "нет " + n + "_" + slot) + "</figcaption></figure>";
 }
 async function toJpeg(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -490,7 +474,7 @@ function ensureRel(rels, rid, target) {
 async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, beforeFile, afterFile }) {
   const zip = await JSZip.loadAsync(templateBuf);
   let xml = await zip.file("word/document.xml").async("string");
-  const useNo = (integration || "").trim() || String(actNo);
+  const useNo = String(integration || "").trim() || String(actNo);
   const map = {
     "{{НОМЕР-АКТА}}": useNo,
     "{{ДАТА-АКТА-ТЕКСТ}}": ruQuoted(actDate),
@@ -550,10 +534,11 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
   return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
 function actName(n, integration) {
-  const use = (integration || "").trim() || String(n);
+  const use = String(integration || "").trim() || String(n);
   return "Акт об Устранении №" + use + ".docx";
 }
-async function saveAct(n) {
+async function saveAct(n, folder) {
+  if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
   const info = await lookup(n);
   if (!info.ok) throw new Error(info.error);
   if (!info.can_build) throw new Error(info.block);
@@ -574,61 +559,13 @@ async function saveAct(n) {
     afterFile: after ? await after.handle.getFile() : null,
   });
   const name = actName(n, info.act.integration);
-  if (!dirHandle) throw new Error("Сначала выбери папку");
-  const fh = await dirHandle.getFileHandle(name, { create: true });
+  if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
+  const fh = await folder.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
   await w.write(blob);
   await w.close();
   return name;
 }
-async function pickFolder() {
-  dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-  $("folder").textContent = dirHandle.name;
-  $("num").disabled = false;
-  await refreshFiles();
-  try {
-    const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open("akt-tool", 1);
-      req.onupgradeneeded = () => req.result.createObjectStore("kv");
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction("kv", "readwrite");
-      tx.objectStore("kv").put(dirHandle, "dir");
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (_) {}
-}
-async function restoreFolder() {
-  try {
-    const db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open("akt-tool", 1);
-      req.onupgradeneeded = () => req.result.createObjectStore("kv");
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    const handle = await new Promise((resolve) => {
-      const tx = db.transaction("kv", "readonly");
-      const req = tx.objectStore("kv").get("dir");
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-    if (!handle) return;
-    const perm = await handle.queryPermission({ mode: "readwrite" });
-    if (perm !== "granted") return;
-    dirHandle = handle;
-    $("folder").textContent = dirHandle.name;
-    await refreshFiles();
-    await loadOpen();
-    await loadIntMap();
-    renderOpen();
-  } catch (_) {}
-}
-$("pick").addEventListener("click", () => pickFolder().catch((e) => {
-  $("out").innerHTML = '<div class="msg bad">' + (e.message || "Папку выбрать не удалось.") + "</div>";
-}));
 function expandNumbers(raw) {
   const nos = [];
   for (const part of (raw || "").trim().split(/\s+/)) {
@@ -652,9 +589,16 @@ $("num").addEventListener("input", () => {
     const nos = expandNumbers(raw);
     if (!nos.length || !dirHandle) { $("out").innerHTML = ""; $("go").disabled = true; $("pdfBtn").disabled = true; return; }
     if (nos.length === 1) {
-      render(await lookup(nos[0]));
-      wireSlots();
-      $("pdfBtn").disabled = !$("go").disabled ? false : true;
+      const folder = dirHandle;
+      try {
+        const info = await lookup(nos[0]);
+        if (folder !== dirHandle || raw !== $("num").value.trim()) return;
+        render(info);
+        wireSlots();
+        $("pdfBtn").disabled = !info.ok || info.act.status !== "К устранению";
+      } catch (error) {
+        if (folder === dirHandle) $("hint").textContent = error.message;
+      }
     } else {
       $("out").innerHTML = '<div class="msg ok">Выбрано номеров: ' + nos.length + ' (' + nos.slice(0,10).join(", ") + (nos.length>10?"…":"") + ')</div>';
       $("go").disabled = false;
@@ -669,15 +613,16 @@ $("go").addEventListener("click", async () => {
   const nos = expandNumbers($("num").value);
   $("hint").textContent = "Собираю " + nos.length + "…";
   const done = [];
+  const folder = dirHandle;
   for (const n of nos) {
     try {
-      const name = await saveAct(n);
+      const name = await saveAct(n, folder);
       done.push(name);
     } catch (e) {
-      $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + n + ": " + e.message + "</div>");
+      $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + n + ": " + esc(e.message) + "</div>");
     }
   }
-  $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Сохранено: ' + done.join(", ") + "</div>");
+  $("out").insertAdjacentHTML("afterbegin", '<div class="msg ok">Сохранено: ' + esc(done.join(", ")) + "</div>");
   $("go").disabled = false;
   $("hint").textContent = "";
 });
@@ -695,158 +640,6 @@ async function getCyrFont() {
   return cyrFontBytes;
 }
 
-async function makeActPdf(n) {
-  const info = await lookup(n);
-  if (!info.ok || !info.can_build) throw new Error(info.block || info.error);
-  const { PDFDocument } = PDFLib;
-  const pdf = await PDFDocument.create();
-  pdf.registerFontkit(fontkit);
-  const page = pdf.addPage([595, 842]);
-  const font = await pdf.embedFont(await getCyrFont(), { subset: false });
-  const W = 595, H = 842;
-  const midY = H / 2;
-  const photoMaxH = midY - 20;
-  const photoMaxW = W - 40;
-  const entries = await listEntries();
-  const before = findPhotoEntry(entries, n, 1);
-  const after = findPhotoEntry(entries, n, 2);
-  const slots = [];
-  if (before) slots.push({ e: before });
-  if (after) slots.push({ e: after });
-  if (slots.length) {
-    const gap = 8;
-    const slotW = (photoMaxW - (slots.length - 1) * gap) / slots.length;
-    const photoTop = H - 10;
-    for (let i = 0; i < slots.length; i++) {
-      try {
-        const file = await slots[i].e.handle.getFile();
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        let img;
-        try { img = await pdf.embedJpg(bytes); }
-        catch (_) { try { img = await pdf.embedPng(bytes); } catch (__) { continue; } }
-        const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        const x = 20 + i * (slotW + gap) + (slotW - dw) / 2;
-        const y = photoTop - dh;
-        if (y > midY - 5) {
-          page.drawImage(img, { x, y, width: dw, height: dh });
-        }
-      } catch (err) { console.warn("photo", n, err); }
-    }
-  }
-  let y = midY - 16;
-  page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
-  y -= 14;
-  const intn = info.act.integration || "";
-  if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 8, font }); y -= 12; }
-  page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
-  y -= 14;
-  page.drawText("Описание:", { x: 40, y, size: 8, font });
-  y -= 14;
-  // description with newline handling, fills to bottom
-  let rest = (info.act.description || "—");
-  const maxChars = 85;
-  const bottomLimit = 40;
-  const paragraphs = rest.split(/\n/);
-  for (const para of paragraphs) {
-    let p = para;
-    while (p && y > bottomLimit) {
-      let line = p.slice(0, maxChars);
-      if (p.length > maxChars) {
-        const cut = line.lastIndexOf(" ");
-        if (cut > 30) line = line.slice(0, cut);
-      }
-      page.drawText(line, { x: 40, y, size: 8, font, maxWidth: 515 });
-      p = p.slice(line.length).trimStart();
-      y -= 12;
-    }
-    if (p && y > bottomLimit) {
-      page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 8, font, maxWidth: 515 });
-      y -= 12;
-    }
-    y -= 4; // gap between paragraphs
-  }
-  y -= 6;
-  const raw = comments[String(n)];
-  const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
-  const c1n = (colNames && colNames.c1) || "Комментарий";
-  const c2n = (colNames && colNames.c2) || "Примечание";
-  if ((cc.c1 || cc.c2) && y > 30) {
-    page.drawText(c1n + ": " + (cc.c1 || "—") + "    " + c2n + ": " + (cc.c2 || "—"), { x: 40, y, size: 9, font, maxWidth: 515 });
-  }
-  return await pdf.save();
-}
-
-async function makeCoverPdf(nos) {
-  const { PDFDocument } = PDFLib;
-  const pdf = await PDFDocument.create();
-  pdf.registerFontkit(fontkit);
-  const page = pdf.addPage([595, 842]);
-  const font = await pdf.embedFont(await getCyrFont(), { subset: false });
-  const bold = font;
-  page.drawText("Устранение нарушений", { x: 30, y: 810, size: 14, font: bold });
-  page.drawText("Всего: " + nos.length, { x: 30, y: 792, size: 10, font });
-  let y = 770;
-  const c1n = (colNames && colNames.c1) || "Комментарий";
-  const c2n = (colNames && colNames.c2) || "Примечание";
-  page.drawText("№", { x: 30, y, size: 8, font: bold });
-  page.drawText("Инт. №", { x: 55, y, size: 8, font: bold });
-  page.drawText("Описание", { x: 90, y, size: 8, font: bold });
-  page.drawText("Фото", { x: 330, y, size: 8, font: bold });
-  page.drawText(c1n.slice(0, 10), { x: 370, y, size: 8, font: bold });
-  page.drawText(c2n.slice(0, 10), { x: 480, y, size: 8, font: bold });
-  y -= 4;
-  page.drawLine({ start: { x: 30, y }, end: { x: 565, y }, thickness: 0.5 });
-  y -= 11;
-  const rowH = Math.max(16, Math.min(22, (y - 28) / Math.max(nos.length, 1)));
-  const thumbH = Math.min(rowH - 4, 14);
-  const entries = await listEntries();
-  for (const n of nos) {
-    if (y < 28) break;
-    const info = await lookup(n);
-    const intn = info.ok ? (info.act.integration || "—") : "—";
-    const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
-    const descMax = 52;
-    let desc1 = descFull.slice(0, descMax);
-    let desc2 = "";
-    if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
-    const raw = comments[String(n)];
-    const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
-    page.drawText(String(n), { x: 30, y, size: 7, font });
-    page.drawText(String(intn), { x: 55, y, size: 7, font });
-    page.drawText(desc1, { x: 90, y, size: 7, font, maxWidth: 230 });
-    if (desc2) page.drawText(desc2, { x: 90, y: y - 8, size: 7, font, maxWidth: 230 });
-    // mini photos
-    const before = findPhotoEntry(entries, n, 1);
-    const after = findPhotoEntry(entries, n, 2);
-    let px = 330;
-    for (const e of [before, after]) {
-      if (e) {
-        try {
-          const file = await e.handle.getFile();
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          let img;
-          try { img = await pdf.embedJpg(bytes); }
-          catch (_) { try { img = await pdf.embedPng(bytes); } catch (__) { img = null; } }
-          if (img) {
-            const scale = Math.min(thumbH / img.height, 16 / img.width, 1);
-            const dw = img.width * scale;
-            const dh = img.height * scale;
-            page.drawImage(img, { x: px, y: y - 2, width: dw, height: dh });
-          }
-        } catch (_) {}
-      }
-      px += 16;
-    }
-    page.drawText((cc.c1 || "").slice(0, 16), { x: 370, y, size: 7, font, maxWidth: 100 });
-    page.drawText((cc.c2 || "").slice(0, 16), { x: 480, y, size: 7, font, maxWidth: 80 });
-    y -= rowH;
-    if (y > 28) page.drawLine({ start: { x: 30, y: y + 10 }, end: { x: 565, y: y + 10 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
-  }
-  return await pdf.save();
-}
-
 async function downloadPdf(bytes, name) {
   const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
@@ -861,185 +654,6 @@ async function downloadPdf(bytes, name) {
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
   }, 0);
 }
-
-$("pdfBtn").addEventListener("click", async () => {
-  const nos = expandNumbers($("num").value);
-  if (!nos.length) return;
-  $("hint").textContent = "Делаю PDF…";
-  try {
-    if (nos.length === 1) {
-      const bytes = await makeActPdf(nos[0]);
-      await downloadPdf(bytes, "Акт_" + nos[0] + ".pdf");
-    } else {
-      const { PDFDocument } = PDFLib;
-      const merged = await PDFDocument.create();
-      for (const n of nos) {
-        try {
-          const bytes = await makeActPdf(n);
-          const src = await PDFDocument.load(bytes);
-          const [p] = await merged.copyPages(src, [0]);
-          merged.addPage(p);
-        } catch (_) {}
-      }
-      await downloadPdf(await merged.save(), "акты.pdf");
-    }
-    $("hint").textContent = "PDF готов";
-  } catch (e) {
-    $("hint").textContent = "";
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + e.message + "</div>");
-  }
-});
-
-
-
-$("journalBtn").addEventListener("click", async () => {
-  const nos = openRows.map(r => r.act_no);
-  if (!nos.length) { alert("Нет незакрытых актов"); return; }
-  $("hint").textContent = "Собираю журнал…";
-  try {
-    const { PDFDocument } = PDFLib;
-    const journal = await PDFDocument.create();
-    journal.registerFontkit(fontkit);
-    const fontBytes = await getCyrFont();
-    const font = await journal.embedFont(fontBytes, { subset: false });
-    // cover page
-    const coverPage = journal.addPage([595, 842]);
-    coverPage.drawText("Устранение нарушений", { x: 30, y: 810, size: 14, font });
-    coverPage.drawText("Всего: " + nos.length, { x: 30, y: 792, size: 10, font });
-    let cy = 770;
-    const c1n = (colNames && colNames.c1) || "Комментарий";
-    const c2n = (colNames && colNames.c2) || "Примечание";
-    coverPage.drawText("№", { x: 30, y: cy, size: 8, font });
-    coverPage.drawText("Инт. №", { x: 55, y: cy, size: 8, font });
-    coverPage.drawText("Описание", { x: 90, y: cy, size: 8, font });
-    coverPage.drawText("Фото", { x: 330, y: cy, size: 8, font });
-    coverPage.drawText(c1n.slice(0, 10), { x: 370, y: cy, size: 8, font });
-    coverPage.drawText(c2n.slice(0, 10), { x: 480, y: cy, size: 8, font });
-    cy -= 4;
-    coverPage.drawLine({ start: { x: 30, y: cy }, end: { x: 565, y: cy }, thickness: 0.5 });
-    cy -= 11;
-    const rowH = Math.max(16, Math.min(22, (cy - 28) / Math.max(nos.length, 1)));
-    const thumbH = Math.min(rowH - 4, 14);
-    const entries = await listEntries();
-    for (const n of nos) {
-      if (cy < 28) break;
-      const info = await lookup(n);
-      const intn = info.ok ? (info.act.integration || "—") : "—";
-      const descFull = info.ok ? (info.act.description || "").replace(/\n/g, " ") : "";
-    const descMax = 52;
-    let desc1 = descFull.slice(0, descMax);
-    let desc2 = "";
-    if (descFull.length > descMax) { const cut = desc1.lastIndexOf(" "); if (cut > 20) desc1 = desc1.slice(0, cut); desc2 = descFull.slice(desc1.length).trimStart().slice(0, descMax); }
-      const raw = comments[String(n)];
-      const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
-      coverPage.drawText(String(n), { x: 30, y: cy, size: 7, font });
-      coverPage.drawText(String(intn), { x: 55, y: cy, size: 7, font });
-      coverPage.drawText(desc1, { x: 90, y: cy, size: 7, font, maxWidth: 235 });
-      if (desc2) coverPage.drawText(desc2, { x: 90, y: cy - 8, size: 7, font, maxWidth: 235 });
-      const before = findPhotoEntry(entries, n, 1);
-      const after = findPhotoEntry(entries, n, 2);
-      let px = 330;
-      for (const e of [before, after]) {
-        if (e) {
-          try {
-            const file = await e.handle.getFile();
-            const bytes = new Uint8Array(await file.arrayBuffer());
-            let img;
-            try { img = await journal.embedJpg(bytes); }
-            catch (_) { try { img = await journal.embedPng(bytes); } catch (__) { img = null; } }
-            if (img) {
-              const scale = Math.min(thumbH / img.height, 16 / img.width, 1);
-              const dw = img.width * scale;
-              const dh = img.height * scale;
-              coverPage.drawImage(img, { x: px, y: cy - 2, width: dw, height: dh });
-            }
-          } catch (_) {}
-        }
-        px += 16;
-      }
-      coverPage.drawText((cc.c1 || "").slice(0, 16), { x: 370, y: cy, size: 7, font, maxWidth: 100 });
-      coverPage.drawText((cc.c2 || "").slice(0, 16), { x: 480, y: cy, size: 7, font, maxWidth: 80 });
-      cy -= rowH;
-      if (cy > 28) coverPage.drawLine({ start: { x: 30, y: cy + 10 }, end: { x: 565, y: cy + 10 }, thickness: 0.3, color: PDFLib.rgb(0.75, 0.75, 0.75) });
-    }
-    // act pages
-    for (const n of nos) {
-      try {
-        const info = await lookup(n);
-        if (!info.ok || !info.can_build) continue;
-        const page = journal.addPage([595, 842]);
-        const W = 595, H = 842;
-        const midY = H / 2;
-        const photoMaxH = midY - 20;
-        const entries = await listEntries();
-        const before = findPhotoEntry(entries, n, 1);
-        const after = findPhotoEntry(entries, n, 2);
-        const slots = [];
-        if (before) slots.push({ e: before });
-        if (after) slots.push({ e: after });
-        if (slots.length) {
-          const gap = 8;
-          const slotW = (W - 40 - (slots.length - 1) * gap) / slots.length;
-          const photoTop = H - 10;
-          for (let i = 0; i < slots.length; i++) {
-            try {
-              const file = await slots[i].e.handle.getFile();
-              const bytes = new Uint8Array(await file.arrayBuffer());
-              let img;
-              try { img = await journal.embedJpg(bytes); }
-              catch (_) { try { img = await journal.embedPng(bytes); } catch (__) { continue; } }
-              const scale = Math.min(slotW / img.width, photoMaxH / img.height, 1);
-              const dw = img.width * scale, dh = img.height * scale;
-              const x = 20 + i * (slotW + gap) + (slotW - dw) / 2;
-              const y = photoTop - dh;
-              if (y > midY - 5) {
-                page.drawImage(img, { x, y, width: dw, height: dh });
-              }
-            } catch (err) { console.warn("jphoto", n, err); }
-          }
-        }
-        let y = midY - 16;
-        page.drawText("Акт об устранении № " + n, { x: 40, y, size: 13, font });
-        y -= 14;
-        const intn = info.act.integration || "";
-        if (intn) { page.drawText("Инт. № " + intn, { x: 40, y, size: 8, font }); y -= 12; }
-        page.drawText("Дата предписания: " + (info.act.pred_date || "—") + "    Срок: " + (info.act.deadline || "—"), { x: 40, y, size: 8, font });
-        y -= 14;
-        page.drawText("Описание:", { x: 40, y, size: 8, font });
-        y -= 14;
-        let rest = (info.act.description || "—");
-        const maxChars = 85;
-        const bottomLimit = 40;
-        const paragraphs = rest.split(/\n/);
-        for (const para of paragraphs) {
-          let p = para;
-          while (p && y > bottomLimit) {
-            let line = p.slice(0, maxChars);
-            if (p.length > maxChars) {
-              const cut = line.lastIndexOf(" ");
-              if (cut > 30) line = line.slice(0, cut);
-            }
-            page.drawText(line, { x: 40, y, size: 8, font, maxWidth: 515 });
-            p = p.slice(line.length).trimStart();
-            y -= 12;
-          }
-          if (p && y > bottomLimit) {
-            page.drawText(p.slice(0, maxChars - 3) + "…", { x: 40, y, size: 8, font, maxWidth: 515 });
-            y -= 12;
-          }
-          y -= 4;
-        }
-      } catch (err) { console.warn("jact", n, err); }
-    }
-    await downloadPdf(await journal.save(), "журнал.pdf");
-    $("hint").textContent = "Журнал готов";
-  } catch (e) {
-    $("hint").textContent = "";
-    alert(e.message);
-  }
-});
-
-restoreFolder().then(() => loadOpen().then(() => { renderOpen(); wireSlots(); }));
 
 function wireSlots() {
   document.querySelectorAll("[data-pick]").forEach((el) => {
@@ -1056,7 +670,7 @@ function armPhotoPick(n, slot) {
   const num = Number(n);
   const sl = Number(slot);
   if (!Number.isFinite(num) || !Number.isFinite(sl)) return;
-  photoTarget = { n: num, slot: sl };
+  photoTarget = { n: num, slot: sl, folder: dirHandle };
   const inp = $("photoIn");
   inp.dataset.n = String(num);
   inp.dataset.slot = String(sl);
@@ -1080,7 +694,7 @@ $("photoIn").addEventListener("change", async () => {
   }
   $("hint").textContent = "Сохраняю фото…";
   try {
-    await savePhoto(n, slot, file);
+    await savePhoto(n, slot, file, target.folder);
     const shown = expandNumbers(($("num").value || "").trim());
     if (shown.length === 1 && shown[0] === n) render(await lookup(n));
     await renderOpen();
