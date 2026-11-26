@@ -12,9 +12,24 @@ const ExonExport = (() => {
     return url;
   }
 
-  async function run(target, credentials, announce, onTab, signal, captureWorkbook = false) {
+  async function run(target, credentials, announce, onTab, signal, captureWorkbook = false, useWorkbook) {
+    signal.throwIfAborted();
     const {id} = await chrome.tabs.create({url: target.href, active: false});
-    onTab(id);
+    let closing;
+    const close = () => closing ??= chrome.tabs.remove(id).catch(() => {});
+    signal.addEventListener("abort", close, {once: true});
+    try {
+      signal.throwIfAborted();
+      onTab(id);
+      return await runInTab(id, target, credentials, announce, signal, captureWorkbook, useWorkbook);
+    } finally {
+      signal.removeEventListener("abort", close);
+      await close();
+      onTab(null);
+    }
+  }
+
+  async function runInTab(id, target, credentials, announce, signal, captureWorkbook, useWorkbook) {
     const path = target.pathname.replace(/\/$/, "");
     const pause = () => new Promise(resolve => setTimeout(resolve, 240));
 
@@ -154,19 +169,28 @@ const ExonExport = (() => {
     if (!page.total && !page.checked) throw new Error(incomplete);
     announce("Запрашиваем XLS у Экзона…");
     await wait(() => call("actions"), "Кнопка «Выбрать действие» недоступна.");
-    const captureKey = captureWorkbook ? "miskhubWorkbook-" + crypto.randomUUID() : null;
+    const captureKey = "miskhubWorkbook-" + crypto.randomUUID();
+    let workbook;
     try {
-      if (captureKey && !await call("arm", null, captureKey)) throw new Error("Не удалось подготовить получение файла Экзона.");
+      if (!await call(captureWorkbook ? "arm" : "watch", null, captureKey)) throw new Error("Не удалось подготовить получение файла Экзона.");
       const result = await wait(() => call("xls"), "В меню Экзона нет действия «Скачать в XLS».", 8000);
       if (result.disabled) throw new Error("Экзон отключил действие «Скачать в XLS». Проверьте право на выгрузку в проекте.");
-      if (!captureKey) return page.total;
-      const workbook = await wait(() => call("read", null, captureKey), "Экзон не вернул файл реестра. Попробуйте скачать его в инструменте «Экзон».", 60000);
+      workbook = await wait(() => call("read", null, captureKey), "Экзон не вернул файл реестра. Попробуйте скачать его в инструменте «Экзон».", 60000);
       if (workbook.error) throw new Error(workbook.error);
-      return {...workbook, count: page.total};
     } finally {
-      if (captureKey) await chrome.scripting.executeScript({target: {tabId: id}, func: captureExonWorkbook,
+      await chrome.scripting.executeScript({target: {tabId: id}, func: captureExonWorkbook,
         args: ["close", path, captureKey], world: "MAIN"}).catch(() => {});
     }
+    if (!captureWorkbook) return page.total;
+    const result = {...workbook, count: page.total};
+    if (!useWorkbook) return result;
+    const read = async (action, args = null) => {
+      signal.throwIfAborted();
+      const [reply] = await chrome.scripting.executeScript({target: {tabId: id}, world: "MAIN",
+        func: exonRemarkData, args: [action, path, args]});
+      return reply?.result;
+    };
+    return useWorkbook(result, {project: path.split("/")[2], read});
   }
 
   return {parseLink, run};

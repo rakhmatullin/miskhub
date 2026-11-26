@@ -1,10 +1,11 @@
 const RemarkPhotos = (() => {
   // The original n_1.jpg and n_2.jpg stay at the head of each row.
   const filenames = /^(-?\d+)_(1|2)(?:_(\d+)(?:_([a-f0-9-]+))?)?\.(?:jpe?g|png|webp|bmp|tiff?|gif|avif)$/i;
+  const imported = /^([a-f0-9]{32})-([1-9]\d*)-([1-9]\d*)$/;
   const lockName = "miskhub-remark-photos";
   const preview = $("remark-photo-preview");
   const picker = $("photoIn");
-  let target, busy = false, selection, previewUrl;
+  let target, busy = false, syncing = 0, selection, previewUrl;
   const displays = new WeakMap();
   const galleries = new WeakMap();
 
@@ -16,8 +17,10 @@ const RemarkPhotos = (() => {
       const n = Number(parsed[1]), group = Number(parsed[2]), order = Number(parsed[3] || 0);
       if (!Number.isSafeInteger(n) || !Number.isSafeInteger(order)) continue;
       if (!result.has(n)) result.set(n, []);
-      const normalized = /^[a-f0-9-]{36}$/i.test(parsed[4] || "") && /\.jpg$/i.test(entry.name);
-      result.get(n).push({...entry, group, order, normalized});
+      const remote = imported.exec(parsed[4] || "");
+      const normalized = Boolean(remote || /^[a-f0-9-]{36}$/i.test(parsed[4] || "")) && /\.jpg$/i.test(entry.name);
+      const exon = remote ? {id: remote[1], page: Number(remote[2]), total: Number(remote[3])} : null;
+      result.get(n).push({...entry, group, order, normalized, exon});
     }
     for (const entries of result.values()) {
       entries.sort((a, b) => a.group - b.group || a.order - b.order || a.name.localeCompare(b.name));
@@ -49,20 +52,54 @@ const RemarkPhotos = (() => {
     }
   }
 
-  async function saveFiles({folder, n, group}, files) {
+  async function sourcePages(entries, id) {
+    const candidates = (entries || []).filter(entry => entry.group === 1 && entry.exon?.id === id &&
+      Number.isSafeInteger(entry.exon.total) && entry.exon.page <= entry.exon.total);
+    const present = await Promise.all(candidates.map(async entry => {
+      const file = await entry.handle.getFile().catch(() => null);
+      return file?.size > 0;
+    }));
+    return candidates.filter((entry, i) => present[i]);
+  }
+
+  function completeSource(pages) {
+    return pages.length > 0 && pages.every(entry => entry.exon.total === pages[0].exon.total) &&
+      new Set(pages.map(entry => entry.exon.page)).size === pages[0].exon.total;
+  }
+
+  async function hasSource(entries, id) {
+    return completeSource(await sourcePages(entries, id));
+  }
+
+  async function saveFiles({folder, n, group}, files, exonId = null) {
     return navigator.locks.request(lockName, async () => {
       if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
       const current = index(await listEntries(folder)).get(n) || [];
+      const saved = exonId ? await sourcePages(current, exonId) : [];
+      if (completeSource(saved)) return {count: 0, warnings: []};
+      const savedPages = new Set(saved.map(entry => entry.exon.page));
       let order = current.reduce((max, entry) => entry.group === group ? Math.max(max, entry.order) : max, 0);
       const warnings = [];
       let count = 0;
       for (const file of files) {
         const created = [];
         try {
-          const images = convert(file, (page, total) => report(file.name + " · " + page + " / " + total));
+          let pageNumber = 0, totalPages = 1;
+          const expectedPages = saved[0]?.exon.total;
+          const start = saved.length ? Math.max(1, saved[0].order - saved[0].exon.page + 1) : order + 1;
+          const images = convert(file, (page, total) => {
+            totalPages = total;
+            report(file.name + " · " + page + " / " + total);
+          });
           for await (const image of images) {
             if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
-            const filename = [n, group, String(++order).padStart(6, "0"), crypto.randomUUID()].join("_") + ".jpg";
+            pageNumber++;
+            if (expectedPages != null && expectedPages !== totalPages) throw new Error("Число страниц вложения изменилось.");
+            if (savedPages.has(pageNumber)) continue;
+            const position = start + pageNumber - 1;
+            order = Math.max(order, position);
+            const suffix = exonId ? [exonId, pageNumber, totalPages].join("-") : crypto.randomUUID();
+            const filename = [n, group, String(position).padStart(6, "0"), suffix].join("_") + ".jpg";
             const handle = await folder.getFileHandle(filename, {create: true});
             created.push(filename);
             const writer = await handle.createWritable();
@@ -88,6 +125,15 @@ const RemarkPhotos = (() => {
       }
       return {count, warnings};
     });
+  }
+
+  async function importExon(folder, n, file, id) {
+    syncing++;
+    try {
+      return await saveFiles({folder, n, group: 1}, [file], id);
+    } finally {
+      syncing--;
+    }
   }
 
   function report(message, error = false) {
@@ -277,11 +323,11 @@ const RemarkPhotos = (() => {
   // A user may navigate after a successful import. Protect in-flight writes
   // while a PDF is still being converted.
   window.addEventListener("beforeunload", event => {
-    if (busy) {
+    if (busy || syncing) {
       event.preventDefault();
       event.returnValue = true;
     }
   });
 
-  return {index, mount, busy: () => busy};
+  return {index, mount, hasSource, importExon, busy: () => Boolean(busy || syncing)};
 })();

@@ -7,7 +7,7 @@ function captureExonWorkbook(action, remarksPath, key) {
     window[key]?.close();
     return true;
   }
-  if (action !== "arm" || window[key]) return null;
+  if ((action !== "arm" && action !== "watch") || window[key]) return null;
 
   const createURL = URL.createObjectURL;
   const click = HTMLAnchorElement.prototype.click;
@@ -39,9 +39,14 @@ function captureExonWorkbook(action, remarksPath, key) {
 
   function intercept() {
     const blob = recent.get(this.href);
-    if (!blob || !/^document\.xlsx?$/i.test(this.download)) return click.call(this);
+    if (!blob || !/^document(?:[- ]remarks)?\.xlsx?$/i.test(this.download)) return click.call(this);
     const name = this.download;
     restore();
+    if (action === "watch") {
+      click.call(this);
+      capture.result = {started: true};
+      return;
+    }
     if (blob.size > 32 * 1024 * 1024) {
       capture.result = {error: "Реестр больше 32 МБ. Скачайте его в Экзоне и положите в рабочую папку."};
       return;

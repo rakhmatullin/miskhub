@@ -65,7 +65,7 @@ def run(chromium, origin, profile):
 
     page.locator("#pick").click()
     page.locator("#continueMigration").click()
-    expect(page.locator("body")).to_have_attribute("data-version", "2.13")
+    expect(page.locator("body")).to_have_attribute("data-version", "2.14")
     gallery = page.locator('tr[data-remark="126"] [data-photo-for="126"]')
     upload(page, gallery, 1, {"name": "first.png", "mimeType": "image/png", "buffer": bitmap(green)})
     upload(page, gallery, 2, {"name": "second.pdf", "mimeType": "application/pdf", "buffer": colored_pdf([yellow, red])})

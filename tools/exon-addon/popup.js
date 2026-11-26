@@ -100,7 +100,7 @@ form.addEventListener("submit", async event => {
     if (!saveLogin.disabled) await withVault(() => saveSettings(target));
     const count = await ExonExport.run(target, {login: login.value.trim(), password: password.value},
       message => report("export-status", message),
-      id => { tabId = id; showTab.hidden = false; }, run.signal);
+      id => { tabId = id; showTab.hidden = id == null; }, run.signal);
     const selected = count ? " · строк выбрано: " + count : "";
     report("export-status", "Экзону отправлена команда скачивания XLS" + selected + ". Проверьте загрузки браузера.");
   } catch (error) {
