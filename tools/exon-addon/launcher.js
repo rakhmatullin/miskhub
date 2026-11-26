@@ -10,7 +10,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
   if (!sender.url || (sender.frameId != null && sender.frameId !== 0)) return;
   const url = new URL(sender.url);
   if (url.origin + url.pathname !== publishedPage) return;
-  if (message?.type === "exon-open") {
+  if (message?.type === "exon-open-tool" && message.version === chrome.runtime.getManifest().version) {
     openTool().then(() => respond({ready: true}), () => respond({ready: false}));
     return true;
   }

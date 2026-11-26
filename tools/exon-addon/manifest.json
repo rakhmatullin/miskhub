@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Экзон — надстройка",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Скачивает реестр замечаний Экзона в XLS и сохраняет HTML-копии рабочих страниц.",
   "action": {
     "default_title": "Надстройка Экзона"

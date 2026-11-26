@@ -4,11 +4,11 @@ async function exonPageAction(action, remarksPath, credentials) {
   if (location.origin !== origin) return null;
   const visible = node => Boolean(node?.getClientRects().length) &&
     !node.closest('[hidden], [inert], [aria-hidden="true"]') && getComputedStyle(node).visibility !== "hidden";
-  const enabled = node => visible(node) && !node.closest(':disabled, [aria-disabled="true"]');
+  const enabled = node => visible(node) && !node.closest(':disabled, [aria-disabled="true"], .Mui-disabled');
   const normalize = text => text.replace(/\s+/g, " ").trim().toLocaleLowerCase("ru");
-  const controls = 'button, [role="button"], [role="menuitem"], [role="option"], a[href]';
-  const find = (test, parent = document) => [...parent.querySelectorAll(controls)]
-    .find(node => enabled(node) && test(normalize(node.innerText || node.getAttribute("aria-label") || "")));
+  const controls = 'button, [role="button"], [role="menuitem"], [role="option"], [role="combobox"], a[href], .MuiListItemButton-root, [matomo-id]';
+  const find = (test, parent = document, available = enabled) => [...parent.querySelectorAll(controls)]
+    .find(node => available(node) && [node.innerText, node.getAttribute("aria-label")].some(text => text && test(normalize(text))));
 
   if (/^\/auth\/realms\/SpringBoot\//.test(location.pathname)) {
     const password = [...document.querySelectorAll('form input[name="password"][type="password"]')].find(visible);
@@ -46,10 +46,13 @@ async function exonPageAction(action, remarksPath, credentials) {
   if (location.pathname.replace(/\/$/, "") !== remarksPath) return {phase: "other"};
 
   if (action === "xls") {
-    const download = find(text => /^скачать в\s+\.?xls$/i.test(text));
+    const popper = [...document.querySelectorAll('[data-testid="remark-actions-popper"]')].find(visible);
+    const isXls = text => /^скачать в\s+\.?xls$/i.test(text);
+    const download = (popper && find(isXls, popper, visible)) || find(isXls, document, visible);
     if (!download) return false;
+    if (!enabled(download)) return {disabled: true};
     download.click();
-    return true;
+    return {clicked: true};
   }
   if (action === "largest-size") {
     const options = [...document.querySelectorAll('[role="listbox"] [role="option"]')]
@@ -65,7 +68,8 @@ async function exonPageAction(action, remarksPath, credentials) {
   }
 
   const select = document.querySelector('[role="grid"] input[name="select_all_rows"][type="checkbox"]');
-  const region = select?.closest(".MuiDataGrid-root") || select?.closest('[role="grid"]');
+  const grid = select?.closest('[role="grid"]');
+  const region = select?.closest(".MuiDataGrid-root") || grid;
   if (!region || !visible(select)) return null;
   const reset = region.querySelector('[data-testid="reset-filters-btn"]');
   const first = region.querySelector('[data-testid="table-first-page-btn"]');
@@ -77,23 +81,51 @@ async function exonPageAction(action, remarksPath, credentials) {
   const total = range ? Number(range[3]) : pageText.startsWith("0") ? 0 : null;
   const selected = count.match(/\d[\d\s\u00a0\u202f]*/)?.[0].replace(/\s/g, "");
   const checked = select.checked && !select.indeterminate && select.dataset.indeterminate !== "true";
-  const bulk = find(text => text === "выбрать действие", region) || find(text => text === "выбрать действие");
+  const loading = region.getAttribute("aria-busy") === "true" ||
+    [...grid.querySelectorAll('[role="progressbar"], .MuiDataGrid-loadingOverlay, .MuiDataGrid-skeletonLoadingOverlay')].some(visible);
+  const bulk = [...document.querySelectorAll('[data-testid="open-remark-actions-popper-btn"]')].find(enabled) ||
+    find(text => /^(выбрать|выберите) действие$/.test(text), region) || find(text => /^(выбрать|выберите) действие$/.test(text));
+  const scroller = grid.querySelector(".MuiDataGrid-virtualScroller");
 
   switch (action) {
     case "state":
       return {
         phase: "remarks", total, start: range ? Number(range[1]) : null, end: range ? Number(range[2]) : null,
         selected: selected == null ? null : Number(selected), checked, bulk: Boolean(bulk), next: enabled(next),
-        filtered: enabled(reset), ready: enabled(select) && region.getAttribute("aria-busy") !== "true"
+        filtered: enabled(reset), ready: enabled(select) && !loading
       };
     case "reset":
       if (!enabled(reset)) return false;
       reset.click();
       return true;
     case "select":
-      if (!enabled(select)) return false;
+      if (!enabled(select) || loading) return false;
       if (!checked) select.click();
       return true;
+    case "clear-all":
+      if (!enabled(select)) return false;
+      if (checked) select.click();
+      return true;
+    case "rewind-rows":
+      if (scroller) scroller.scrollTop = 0;
+      return true;
+    case "select-visible-rows": {
+      if (loading) return null;
+      const inputs = [...grid.querySelectorAll('[role="row"] input[name="select_row"][type="checkbox"]')].filter(visible);
+      if (!inputs.length) return null;
+      for (const input of inputs) {
+        if (!input.isConnected || input.checked || !enabled(input)) continue;
+        input.click();
+        // Let the grid commit its controlled selection before adding another row.
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      const before = scroller?.scrollTop ?? 0;
+      if (scroller?.clientHeight) {
+        // Overlap the rendered rows between scroll positions.
+        scroller.scrollTop += Math.floor(scroller.clientHeight * 0.75);
+      }
+      return {advanced: (scroller?.scrollTop ?? 0) > before};
+    }
     case "select-total": {
       if (!total) return false;
       const all = find(text => /^выбрать все(?:\s+\d[\d ]*)?(?:\s+(?:замечаний|замечания|строк|результатов))?(?:\s*\(\d[\d ]*\))?$/.test(text), region);
@@ -103,7 +135,9 @@ async function exonPageAction(action, remarksPath, credentials) {
     }
     case "size":
       if (!enabled(size)) return false;
-      size.click();
+      size.dispatchEvent(new MouseEvent("mousedown", {button: 0, bubbles: true, cancelable: true}));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (size.getAttribute("aria-expanded") !== "true") size.click();
       return true;
     case "next":
       if (!enabled(next)) return false;
