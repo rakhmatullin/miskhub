@@ -128,7 +128,9 @@ const ExonRemarkFiles = (() => {
 
     const files = new Map();
     const integration = {};
+    const remarkIds = {};
     for (const row of byNumber.values()) {
+      remarkIds[row.n] = row.id;
       if (row.integration && row.integration.length <= 120) integration[row.n] = row.integration;
       if (!opened.has(row.n)) continue;
       for (const file of row.files || []) {
@@ -136,7 +138,7 @@ const ExonRemarkFiles = (() => {
         files.get(file.id).numbers.push(row.n);
       }
     }
-    return {integration, files: [...files.values()], warnings};
+    return {integration, remarkIds, files: [...files.values()], warnings};
   }
 
   return {catalog};

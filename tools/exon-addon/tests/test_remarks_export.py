@@ -374,6 +374,7 @@ async def run(chromium, profile):
               });
         }""")
         assert inventory["integration"] == {"126": "605", "127": "606", "128": "607"}
+        assert inventory["remarkIds"] == {"126": "a", "127": "b", "128": "c"}
         assert inventory["files"] == [{"id": "image1", "name": "Фото.png", "numbers": [126, 127]}]
         assert not inventory["warnings"]
         assert base64.b64decode(inventory["blob"]["encoded"]) == b"fixture image"

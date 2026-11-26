@@ -33,7 +33,7 @@ BRIDGE = """() => {
                         if (!connected) return;
                         if (request.type === 'refresh') {
                             window.refreshRequests.push(request);
-                            onMessage.emit({type: 'connected', protocol: 2});
+                            onMessage.emit({type: 'connected', protocol: 3});
                             onMessage.emit({type: 'progress', text: 'Запрашиваем XLS у Экзона…'});
                             onMessage.emit(window.exonResponse);
                         } else if (request.type === 'plan') {
@@ -68,12 +68,12 @@ def run(chromium, origin, profile):
     errors, requests = [], []
     ctx, page = start(chromium, profile, origin, errors, requests)
     page.evaluate(BRIDGE)
-    expect(page.locator("body")).to_have_attribute("data-version", "2.14")
+    expect(page.locator("body")).to_have_attribute("data-version", "2.15")
     button = page.get_by_role("button", name="Обновить реестр", exact=True)
     status = page.locator("#registryStatus")
     button.click()
     expect(status).to_contain_text("Открыт «Экзон»")
-    assert page.evaluate("refreshRequests.at(-1)") == {"type": "refresh", "protocol": 2, "workspaceReady": False}
+    assert page.evaluate("refreshRequests.at(-1)") == {"type": "refresh", "protocol": 3, "workspaceReady": False}
 
     page.evaluate("window.exonResponse = {type:'folder'}")
     button.click()
@@ -94,7 +94,7 @@ def run(chromium, origin, profile):
 
     page.evaluate("""([image, pdf]) => {
         window.exonCatalog = {type:'catalog', project:'fixture-project',
-            integration:{126:'205',129:'207'}, files:[
+            integration:{126:'205',129:'207'}, remarkIds:{126:'remark-126',129:'remark-129'}, files:[
                 {id:'photo1',name:'Фото.png',numbers:[129]},
                 {id:'pdf1',name:'Приложение.pdf',numbers:[129]},
                 {id:'closed-file',name:'Закрыто.png',numbers:[126]}
@@ -128,6 +128,20 @@ def run(chromium, origin, profile):
     assert json.loads(read(page, "интеграционные.json")) == {"126": "205", "127": "Ручной номер", "129": "207"}
     assert json.loads(read(page, LINKS))["assignments"]["126"] == person
 
+    exon_url = "https://exon.exonproject.ru/projects/fixture-project/buildControl/remarks/remark-129"
+    ctx.route(exon_url, lambda route: route.fulfill(body="<title>Карточка замечания</title>", content_type="text/html"))
+    page.locator('#open tr[data-remark="129"] .num').click()
+    detail = page.get_by_role("dialog", name="Замечание №129")
+    expect(detail).to_contain_text("Обновлённое замечание 129")
+    expect(detail.locator(".remark-photo-tile")).to_have_count(5)
+    link = detail.get_by_role("link", name="Открыть в Exon")
+    expect(link).to_have_attribute("href", exon_url)
+    with page.expect_popup() as result:
+        link.click()
+    expect(result.value).to_have_url(exon_url)
+    result.value.close()
+    detail.get_by_role("button", name="Закрыть", exact=True).click()
+
     button.click()
     expect(status).to_have_text("Реестр обновлён. Получено замечаний: 2. Добавлено изображений: 0.")
     assert page.evaluate("attachmentRequests.at(-1)") == []
@@ -141,6 +155,9 @@ def run(chromium, origin, profile):
 
     page.reload()
     expect(page.locator('#open tr[data-remark="129"]')).to_be_visible()
+    page.locator('#open tr[data-remark="129"] .num').click()
+    expect(link).to_have_attribute("href", exon_url)
+    page.keyboard.press("Escape")
     with export(page, [129]) as report:
         assert "Обновлённое замечание 129" in report[0].get_text()
 
@@ -148,13 +165,18 @@ def run(chromium, origin, profile):
     expect(page.locator("body")).to_have_attribute("data-version", "2.12")
     expect(page.locator('#open tr[data-remark="126"]')).to_be_visible()
     expect(page.locator("#refreshRegistry")).to_have_count(0)
+    dump(page, [129])
     page.locator('.version-switch a[href="./sborka.html"]').click()
+    page.locator('#open tr[data-remark="129"] .num').click()
+    expect(link).to_be_hidden()
+    expect(detail).to_contain_text("Ссылка появится после обновления реестра из Exon.")
+    page.keyboard.press("Escape")
     button.click()
     expect(page).to_have_url(origin + "exon.html")
     assert not errors, errors
     assert not requests, requests
     ctx.close()
-    print("PASS: integration numbers, attachments and PDF pages in row 1, deduplication, safe registry persistence")
+    print("PASS: Exon links open the matching card, persist on reload and expire on another workbook")
 
 
 def main():
