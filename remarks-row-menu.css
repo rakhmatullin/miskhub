@@ -1,0 +1,23 @@
+.remarks-scroll .table th.remark-actions { width: 51px; }
+button[data-remark-menu] {
+  width: 38px; height: 33px; padding: 0; line-height: 1; font-size: 22px;
+}
+#remark-row-menu {
+  position: fixed; inset: auto; margin: 0; box-sizing: border-box;
+  width: min(190px, calc(100vw - 16px)); padding: 9px; overflow-wrap: anywhere;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--card);
+  color: var(--text); box-shadow: 0 10px 30px #0008;
+}
+#remark-row-menu label {
+  display: flex; align-items: center; min-height: 35px; gap: 7px;
+  padding: 4px; cursor: pointer;
+}
+#remark-row-menu button { width: 100%; padding: 6px 9px; text-align: left; }
+#remark-row-menu :is(button, input):focus-visible, button[data-remark-menu]:focus-visible {
+  outline: 2px solid var(--acc); outline-offset: 2px;
+}
+#remark-row-status { margin: 2px 4px 0; color: var(--mute); font-size: 12px; }
+#remark-row-status.bad { color: var(--bad); }
+@media (max-width: 380px) {
+  body[data-version="2.11"] .top { flex-wrap: wrap; gap: 7px; }
+}

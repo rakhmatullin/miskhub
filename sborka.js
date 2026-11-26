@@ -1,4 +1,4 @@
-/* v2.10 */
+/* v2.11 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const CX = 5240000;
@@ -226,6 +226,25 @@ function scheduleComment(n, field, value) {
   queueLegacyEdit(dirHandle, COMMENTS_FILE, n + "/" + field, edit);
 }
 
+function setSkp(data, n, enabled) {
+  if (enabled) {
+    if (!dictionary(data[n])) data[n] = {c1: data[n] || "", c2: ""};
+    data[n].skp = true;
+  } else if (dictionary(data[n])) {
+    delete data[n].skp;
+  }
+}
+
+async function saveSkp(n, enabled, folder) {
+  legacyWrites++;
+  try {
+    await editLegacy(folder, COMMENTS_FILE, data => setSkp(data, n, enabled));
+    if (folder === dirHandle) setSkp(comments, n, enabled);
+  } finally {
+    legacyWrites--;
+  }
+}
+
 function updateColName(field, value) {
   if (!dirHandle) return;
   colNames[field] = value;
@@ -307,6 +326,7 @@ async function renderOpen() {
       '<td><button type="button" data-resp="' + r.act_no + '">Не назначен</button></td>' +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
+      '<td><button type="button" data-remark-menu="' + r.act_no + '" popovertarget="remark-row-menu" aria-controls="remark-row-menu" aria-expanded="false" aria-label="Действия замечания №' + r.act_no + '">⋯</button></td>' +
       "</tr>";
   }
   if (folder !== dirHandle || version !== renderVersion) return;
@@ -316,7 +336,7 @@ async function renderOpen() {
     RemarksUI.toolbar + '<div class="remarks-scroll"><table class="table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Фото</th><th>Ответственный</th>' +
     '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
-    '</tr></thead><tbody>' +
+    '<th class="remark-actions" aria-label="Действия"></th></tr></thead><tbody>' +
     rows + '</tbody></table></div><p id="respNoRows" hidden>По фильтру замечаний нет.</p></section>';
   host.querySelectorAll("[data-cmt]").forEach((el) => {
     el.addEventListener("input", () => scheduleComment(el.dataset.cmt, el.dataset.field || "c1", el.value));
@@ -433,10 +453,42 @@ function drawingXml(rid, docId, name, cx, cy) {
     '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
     '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
-function appXml() {
-  return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
+function appXml(number) {
+  return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение ' + number + '</w:t></w:r></w:p>';
 }
-async function appendWordPhotos(zip, xml, entries) {
+function addSkpReferences(documentXml, namespace) {
+  const body = documentXml.getElementsByTagNameNS(namespace, "body")[0];
+  if (!body) throw new Error("В шаблоне нет тела акта.");
+  const paragraphs = [...body.children].filter(node => node.localName === "p" && node.namespaceURI === namespace);
+  const textOf = paragraph => [...paragraph.getElementsByTagNameNS(namespace, "t")]
+    .map(node => node.textContent).join("").replace(/\s+/g, " ").trim();
+  const first = paragraphs.find(node => /^Приложение\s*:\s*1\)/u.test(textOf(node)));
+  const second = paragraphs.find(node => /^Приложение\s*:\s*2\)/u.test(textOf(node)));
+  const section = [...body.children].find(node => node.localName === "sectPr" && node.namespaceURI === namespace);
+
+  function reference(text, sample) {
+    const paragraph = documentXml.createElementNS(namespace, "w:p");
+    const formatting = sample?.getElementsByTagNameNS(namespace, "pPr")[0];
+    if (formatting) paragraph.append(formatting.cloneNode(true));
+    const run = documentXml.createElementNS(namespace, "w:r");
+    const styled = sample?.getElementsByTagNameNS(namespace, "r")[0]?.getElementsByTagNameNS(namespace, "rPr")[0];
+    if (styled) run.append(styled.cloneNode(true));
+    const literal = documentXml.createElementNS(namespace, "w:t");
+    literal.textContent = text;
+    run.append(literal);
+    paragraph.append(run);
+    return paragraph;
+  }
+
+  const photos = first || reference("Приложение: 1) Фотоматериалы", second);
+  if (!first) body.insertBefore(photos, second || section || null);
+  if (!second) photos.after(reference("Приложение: 2) Акт приема-передачи", photos));
+  for (const paragraph of paragraphs) {
+    if (/^Приложение\s+[12]$/u.test(textOf(paragraph))) paragraph.remove();
+  }
+}
+
+async function appendWordPhotos(zip, xml, entries, skp) {
   const parser = new DOMParser();
   const documentXml = parser.parseFromString(xml, "application/xml");
   const relsPath = "word/_rels/document.xml.rels";
@@ -467,9 +519,16 @@ async function appendWordPhotos(zip, xml, entries) {
   const height = Math.min(7_800_000, 635 * Math.max(300, twips(size, "h", 16838) -
     twips(margins, "top", 1134) - twips(margins, "bottom", 709) - 1000));
 
-  const paragraphs = [appXml()];
-  let docId = 1, relId = 1, imageId = 1;
-  for (const entry of entries) {
+  const parts = skp
+    ? [1, ...entries.filter(entry => entry.group === 1), 2, ...entries.filter(entry => entry.group === 2)]
+    : [1, ...entries];
+  const paragraphs = [];
+  let docId = 1, relId = 1, imageId = 1, photoNo = 0;
+  for (const entry of parts) {
+    if (typeof entry === "number") {
+      paragraphs.push(appXml(entry));
+      continue;
+    }
     let image;
     try {
       const file = await entry.handle.getFile();
@@ -491,8 +550,12 @@ async function appendWordPhotos(zip, xml, entries) {
     zip.file("word/" + path, image.bytes);
 
     const scale = Math.min(width / image.w, height / image.h);
-    paragraphs.push(drawingXml(rid, docId++, "Фото " + paragraphs.length,
+    paragraphs.push(drawingXml(rid, docId++, "Фото " + (++photoNo),
       Math.max(1, Math.round(image.w * scale)), Math.max(1, Math.round(image.h * scale))));
+  }
+  if (skp) {
+    addSkpReferences(documentXml, w);
+    xml = new XMLSerializer().serializeToString(documentXml);
   }
   const point = xml.lastIndexOf("<w:sectPr");
   if (point < 0) throw new Error("В шаблоне нет раздела страницы.");
@@ -500,7 +563,7 @@ async function appendWordPhotos(zip, xml, entries) {
   return xml.slice(0, point) + paragraphs.join("") + xml.slice(point);
 }
 
-async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, photoEntries }) {
+async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, photoEntries, skp }) {
   const zip = await JSZip.loadAsync(templateBuf);
   let xml = await zip.file("word/document.xml").async("string");
   const useNo = String(integration || "").trim() || String(actNo);
@@ -531,8 +594,8 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
   if (!xml.includes("xmlns:a=")) {
     xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
   }
-  if (photoEntries.length) {
-    xml = await appendWordPhotos(zip, xml, photoEntries);
+  if (skp || photoEntries.length) {
+    xml = await appendWordPhotos(zip, xml, photoEntries, skp);
   } else {
     const path = "word/_rels/document.xml.rels";
     zip.file(path, await zip.file(path).async("string"));
@@ -551,7 +614,7 @@ function actName(n, integration) {
   const use = String(integration || "").trim() || String(n);
   return "Акт об Устранении №" + use + ".docx";
 }
-async function saveAct(n, folder) {
+async function makeAct(n, folder) {
   if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
   const info = await lookup(n, folder);
   if (!info.ok) throw new Error(info.error);
@@ -559,6 +622,7 @@ async function saveAct(n, folder) {
   const entries = await listEntries(folder);
   const templateFile = await fileByName(entries, "shablon-akt.docx");
   const templateBuf = templateFile ? await templateFile.arrayBuffer() : await embeddedTemplate();
+  const {data} = await navigator.locks.request("miskhub-legacy-json", () => readLegacy(folder, COMMENTS_FILE));
   const blob = await buildAct({
     templateBuf,
     actNo: n,
@@ -568,13 +632,23 @@ async function saveAct(n, folder) {
     deadline: info.act.deadline,
     description: info.act.description,
     photoEntries: info.photos,
+    skp: data[n]?.skp === true,
   });
-  const name = actName(n, info.act.integration);
+  return {blob, name: actName(n, info.act.integration)};
+}
+
+async function saveAct(n, folder) {
+  const {blob, name} = await makeAct(n, folder);
   if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
   const fh = await folder.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
-  await w.write(blob);
-  await w.close();
+  try {
+    await w.write(blob);
+    await w.close();
+  } catch (error) {
+    await w.abort().catch(() => {});
+    throw error;
+  }
   return name;
 }
 function expandNumbers(raw) {
@@ -657,8 +731,7 @@ async function getCyrFont() {
   return cyrFontBytes;
 }
 
-async function downloadPdf(bytes, name) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
+function downloadFile(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -670,4 +743,8 @@ async function downloadPdf(bytes, name) {
     a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
   }, 0);
+}
+
+function downloadPdf(bytes, name) {
+  downloadFile(new Blob([bytes], {type: "application/pdf"}), name);
 }
