@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b14">
+  <title>Экзон — MiskHub</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=6">
+  <link rel="stylesheet" href="./hub.css?v=7">
+  <style>
+    main { max-width: 820px; }
+    .exon-version { color: var(--mute); font-size: 13px; }
+    .hero .lead { margin: 0 0 24px; max-width: 54ch; }
+    .hero .toolbar { margin: 0; }
+    .toolbar a { text-decoration: none; }
+    .exon-primary { background: #1c4d86; border-color: #2b6cb0; }
+    :focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+    .tape-wrap ol { padding-left: 24px; margin: 10px 0; }
+    .tape-wrap li + li { margin-top: 8px; }
+    .tape-wrap a { color: var(--acc); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body data-page="exon" data-version="0.2.0">
+  <div class="bg"></div>
+  <header class="top">
+    <a class="brand" href="./index.html"><img src="./assets/favicon.svg?v=6" alt="" width="15" height="15"><span>MiskHub</span></a>
+    <span class="exon-version">v0.2.0 · <a href="./exon.html" style="color:var(--acc)">v0.2.1</a></span>
+  </header>
+  <main>
+    <section class="hero" aria-labelledby="exon-title">
+      <h1 id="exon-title">Реестр замечаний Экзона</h1>
+      <p class="lead">Скачивайте XLS по ссылке на раздел «Замечания». Данные входа вводятся в локальном инструменте расширения для Chrome или Edge.</p>
+      <div class="toolbar">
+        <a class="btn-file exon-primary" href="./assets/exon-addon-v0.2.0.zip" download>Скачать расширение v0.2.0</a>
+      </div>
+    </section>
+    <details class="tape-wrap" id="exon-help" open>
+      <summary>Установка, ручной вход и скачивание HTML</summary>
+      <ol>
+        <li><a href="./assets/exon-addon-v0.2.0.zip" download="Exon-Addon-v0.2.0.zip">Скачайте расширение v0.2.0</a> и распакуйте ZIP.</li>
+        <li>Откройте <code>chrome://extensions</code> или <code>edge://extensions</code> и включите режим разработчика.</li>
+        <li>Нажмите «Загрузить распакованное расширение» и выберите папку <code>exon-addon</code>. При обновлении выберите новую распакованную папку и отключите прежнюю копию расширения.</li>
+        <li>Откройте инструмент через значок «Экзон — надстройка» в браузере. Если вкладка Экзона была открыта до установки, обновите её.</li>
+      </ol>
+      <p><a href="https://exon.exonproject.ru/" target="_blank" rel="noopener noreferrer">Войти в Экзон вручную</a>. Кнопка «Скачать страницу» слева внизу сохраняет HTML открытой страницы.</p>
+      <p><a href="./exon-v0.1.0.html">Предыдущая версия v0.1.0</a></p>
+    </details>
+  </main>
+</body>
+</html>

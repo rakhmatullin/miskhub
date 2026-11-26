@@ -28,7 +28,8 @@ const ExonExport = (() => {
         return result?.result;
       } catch (error) {
         const latest = await chrome.tabs.get(id).catch(() => null);
-        if (latest?.status === "loading" || latest?.url !== tab.url) return null;
+        if (latest?.status === "loading" || latest?.url !== tab.url ||
+            /execution context was destroyed|frame (?:with id \d+ )?was removed/i.test(error.message)) return null;
         throw error;
       }
     }
@@ -57,7 +58,8 @@ const ExonExport = (() => {
       let loggedIn;
       if (credentials.login && credentials.password) {
         announce("Входим в Экзон…");
-        if (await call("login", credentials)) loggedIn = await wait(afterLogin, "", 9000);
+        const submitted = await call("login", credentials);
+        if (submitted !== false) loggedIn = await wait(afterLogin, "", 9000);
       }
       if (!loggedIn) {
         announce("Завершите вход во вкладке Экзона. После входа выгрузка продолжится.");
@@ -81,10 +83,44 @@ const ExonExport = (() => {
     }
     if (page.total == null && page.next) throw new Error(incomplete);
 
+    let selectIndividually = false;
     async function selectRows(expected) {
-      await wait(() => call("select"), "Чекбокс выбора строк недоступен.");
-      if (expected) return wait(state(s => readable(s) && s.bulk && s.selected === expected), incomplete, 6000);
-      return wait(state(s => readable(s) && s.bulk && (s.checked || s.selected > 0)), "Экзон не выбрал строки для выгрузки.");
+      if (!selectIndividually) {
+        await wait(() => call("select"), "Чекбокс выбора строк недоступен.");
+        const selected = await wait(state(s => readable(s) &&
+          (expected ? s.selected === expected : s.checked || s.selected > 0)), null, 3500);
+        if (selected) {
+          const withActions = await wait(state(s => readable(s) && s.bulk &&
+            (expected ? s.selected === expected : s.checked || s.selected > 0)), null, 1800);
+          if (withActions) return withActions;
+        }
+        selectIndividually = true;
+        await chrome.tabs.update(id, {active: true});
+      }
+
+      announce("Отмечаем строки по отдельности…");
+      const current = await wait(state(readable), "Таблица замечаний недоступна.");
+      if (current.checked && !current.bulk) {
+        await call("clear-all");
+        await wait(state(s => readable(s) && !s.checked && !s.selected), "Не удалось сбросить общее выделение.");
+      }
+      const count = expected ?? (current.end == null ? null : current.end - current.start + 1);
+      const confirmed = state(s => {
+        if (!readable(s) || !s.bulk) return false;
+        if (count != null && s.selected != null) return s.selected === count;
+        return expected == null && s.checked;
+      });
+
+      await call("rewind-rows");
+      await pause();
+      let batch;
+      do {
+        batch = await wait(() => call("select-visible-rows"), "В таблице не найдены чекбоксы отдельных строк.", 5000);
+        const done = await confirmed();
+        if (done) return done;
+        if (batch.advanced) await pause();
+      } while (batch.advanced);
+      return wait(confirmed, "Не удалось выделить все строки с помощью чекбоксов Экзона. Проверьте таблицу в открытой вкладке.", 3500);
     }
     page = await selectRows();
     const allSelected = s => s.total > 0 && s.selected === s.total;
@@ -108,13 +144,15 @@ const ExonExport = (() => {
         }
       }
     }
-    if (page.total && !allSelected(page) && (page.start !== 1 || page.end !== page.total || !page.checked)) {
+    if (page.total && !allSelected(page) &&
+        (page.start !== 1 || page.end !== page.total || !page.checked || page.selected != null)) {
       throw new Error(incomplete);
     }
     if (!page.total && !page.checked) throw new Error(incomplete);
     announce("Запрашиваем XLS у Экзона…");
     await wait(() => call("actions"), "Кнопка «Выбрать действие» недоступна.");
-    await wait(() => call("xls"), "В меню Экзона нет действия «Скачать в xls».", 8000);
+    const result = await wait(() => call("xls"), "В меню Экзона нет действия «Скачать в XLS».", 8000);
+    if (result.disabled) throw new Error("Экзон отключил действие «Скачать в XLS». Проверьте право на выгрузку в проекте.");
     return page.total;
   }
 

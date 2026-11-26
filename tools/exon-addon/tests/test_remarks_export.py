@@ -33,12 +33,12 @@ document.querySelector('#keycloakRoot form').onsubmit = event => {
     document.querySelector('#receiver').submit();
 };
 </script>"""
-TABLE = """<!doctype html><style>button,input{margin:3px}</style>
+TABLE = """<!doctype html><style>button,input{margin:3px}.MuiDataGrid-virtualScroller{height:140px;overflow:auto}</style>
 <div class="MuiDataGrid-root" id="table">
     <div class="searchAndFiltersToolbar"><button data-testid="reset-filters-btn">Сбросить фильтры</button></div>
     <div role="grid"><div role="columnheader">
       <input name="select_all_rows" type="checkbox" aria-label="Выбрать все строки">
-    </div></div>
+    </div><div class="MuiDataGrid-virtualScroller" hidden><div id="visible-rows" style="position:relative"></div></div></div>
     <div class="MuiDataGrid-footerContainer">
       <p class="MuiDataGrid-selectedRowCount"></p>
       <p class="MuiTablePagination-displayedRows"></p>
@@ -49,7 +49,7 @@ TABLE = """<!doctype html><style>button,input{margin:3px}</style>
       <button id="bulk" hidden>Выбрать действие</button>
     </div>
 </div>
-<div id="menu" hidden></div>
+<div id="menu" data-testid="remark-actions-popper" hidden></div>
 <script>
 const scenario = CASE;
 const lookup = s => document.querySelector(s);
@@ -62,12 +62,51 @@ const all = lookup('#select-global');
 const bulk = lookup('#bulk');
 const table = lookup('#table');
 const menu = lookup('#menu');
+const scroller = lookup('.MuiDataGrid-virtualScroller');
+const mounted = lookup('#visible-rows');
+const rowHeight = 30;
+const selectedIds = new Set();
 let selected = 0, total = scenario.filtered ? 2 : scenario.total, start = scenario.start || 1, size = 100;
+let headerAll = false;
+function drawRows() {
+    if (!scenario.explicit) return;
+    const length = Math.min(size, total - start + 1);
+    const from = Math.floor(scroller.scrollTop / rowHeight);
+    const limit = Math.min(length, from + Math.ceil(scroller.clientHeight / rowHeight) + 1);
+    mounted.style.height = (length * rowHeight) + 'px';
+    mounted.replaceChildren();
+    for (let i = from; i < limit; i++) {
+        const n = start + i;
+        const row = document.createElement('div');
+        row.setAttribute('role', 'row');
+        row.dataset.id = n;
+        row.style.cssText = 'position:absolute;top:' + (i * rowHeight) + 'px';
+        const box = document.createElement('input');
+        box.name = 'select_row';
+        box.type = 'checkbox';
+        box.checked = headerAll || selectedIds.has(n);
+        box.onchange = () => {
+            if (box.checked) selectedIds.add(n);
+            else selectedIds.delete(n);
+            selected = selectedIds.size;
+            draw();
+        };
+        row.append(box, 'Замечание ' + n);
+        mounted.append(row);
+    }
+}
+if (scenario.explicit) {
+    scroller.hidden = false;
+    scroller.onscroll = drawRows;
+    bulk.dataset.testid = 'open-remark-actions-popper-btn';
+    bulk.textContent = '▼ Выбрать действие';
+}
 function draw() {
     const end = Math.min(start + size - 1, total);
     lookup('.MuiTablePagination-displayedRows').textContent = total ? start + '–' + end + ' из ' + total : '0–0 из 0';
-    lookup('.MuiDataGrid-selectedRowCount').textContent = selected ? 'Выбрано: ' + selected + ' строк' : '';
-    check.checked = selected >= end && total > 0;
+    const gridCount = headerAll ? total : selected;
+    lookup('.MuiDataGrid-selectedRowCount').textContent = gridCount ? gridCount + ' строк выбрано' : '';
+    check.checked = headerAll || (selected >= end && total > 0);
     check.disabled = !total;
     next.disabled = end >= total;
     first.disabled = start === 1;
@@ -77,14 +116,26 @@ function draw() {
 }
 reset.disabled = !scenario.filtered;
 reset.onclick = () => { total = scenario.total; reset.disabled = true; draw(); };
-check.onclick = () => { selected = check.checked ? Math.min(start + size - 1, total) : 0; draw(); };
+check.onclick = () => {
+    if (scenario.explicit) {
+        headerAll = check.checked;
+        selectedIds.clear();
+        selected = 0;
+        drawRows();
+    } else {
+        selected = check.checked ? Math.min(start + size - 1, total) : 0;
+    }
+    draw();
+};
 all.onclick = () => { selected = total; draw(); };
 next.onclick = () => {
     start += size;
-    if (!scenario.preserve) selected = 0;
+    if (!scenario.preserve) { selected = 0; selectedIds.clear(); }
+    scroller.scrollTop = 0;
     draw();
+    drawRows();
 };
-first.onclick = () => { start = 1; selected = 0; draw(); };
+first.onclick = () => { start = 1; selected = 0; selectedIds.clear(); scroller.scrollTop = 0; draw(); drawRows(); };
 function reveal(html) { table.setAttribute('aria-hidden', 'true'); menu.innerHTML = html; menu.hidden = false; }
 function close() { menu.hidden = true; table.removeAttribute('aria-hidden'); }
 picker.onclick = () => {
@@ -92,15 +143,20 @@ picker.onclick = () => {
     reveal('<div role="listbox"><button role="option" aria-selected="true">100</button>' + extra + '</div>');
     for (const option of menu.querySelectorAll('button')) option.onclick = () => {
       const value = Number(option.textContent);
-      if (value !== size) { size = value; start = 1; selected = 0; }
+      if (value !== size) { size = value; start = 1; selected = 0; selectedIds.clear(); scroller.scrollTop = 0; }
       close();
       draw();
+      drawRows();
     };
 };
 bulk.onclick = () => {
-    reveal('<button role="menuitem">Скачать в xls</button><button role="menuitem">Удалить</button>');
-    menu.querySelector('button').onclick = () => {
+    const item = scenario.explicit || scenario.denied
+        ? '<div matomo-id="fixture-download" class="MuiListItemButton-root' + (scenario.denied ? ' Mui-disabled' : '') + '"><span>Скачать в XLS</span></div>'
+        : '<button role="menuitem">Скачать в xls</button>';
+    reveal(item + '<button role="menuitem">Удалить</button>');
+    menu.firstElementChild.onclick = () => {
         document.body.dataset.exportCount = selected;
+        document.body.dataset.explicitCount = selectedIds.size;
         const bytes = Uint8Array.from(atob(WORKBOOK), c => c.charCodeAt(0));
         const download = document.createElement('a');
         download.href = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.ms-excel'}));
@@ -111,6 +167,7 @@ bulk.onclick = () => {
     menu.querySelector('button:last-child').onclick = () => document.body.dataset.wrongAction = 'true';
 };
 draw();
+drawRows();
 </script>"""
 INIT = """() => {
 if (location.origin !== 'https://local-extension.invalid') return;
@@ -251,6 +308,19 @@ async def run(chromium, profile):
             await receive(fixture["total"])
         assert len(attempts) == 1
 
+        for total in (34, 125):
+            case = {"total": total, "explicit": True, "preserve": True}
+            await request()
+            await receive(total)
+            tab = tabs[max(tabs)]
+            await expect(tab.locator("body")).to_have_attribute("data-explicit-count", str(total))
+            assert await tab.locator("input[name=select_row]").count() < total
+
+        case = {"total": 8, "denied": True}
+        await request()
+        await expect(tool.locator("#export-status")).to_contain_text("Проверьте право на выгрузку")
+        assert downloads.empty()
+
         case = {"total": 250}
         await request()
         await expect(tool.locator("#export-status")).to_contain_text("не подтвердил выбор всех")
@@ -290,4 +360,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("PASS: encrypted folder, reload, verified official login, native XLS and full selection across pages")
+    print("PASS: login, XLS, individual selection in virtualized grids, pagination and export permission")
