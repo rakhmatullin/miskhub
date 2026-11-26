@@ -1,6 +1,5 @@
-/* v2.9 */
+/* v2.10 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
-const PHOTO_EXT = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const CX = 5240000;
 const TPL_URL = "./shablon-akt.b64";
@@ -93,13 +92,6 @@ async function findDumpFile(entries) {
   docs.sort((a, b) => b.mtime - a.mtime);
   return docs[0].file;
 }
-function findPhotoEntry(entries, n, slot) {
-  const prefix = (n + "_" + slot + ".").toLowerCase();
-  return entries.find((e) => {
-    const low = e.name.toLowerCase();
-    return low.startsWith(prefix) && PHOTO_EXT.some((ext) => low.endsWith(ext));
-  }) || null;
-}
 function pill(text, cls) { return '<span class="pill ' + (cls || "") + '">' + text + "</span>"; }
 async function embeddedTemplate() {
   const res = await fetch(TPL_URL);
@@ -110,8 +102,8 @@ async function embeddedTemplate() {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 }
-async function lookup(n) {
-  const entries = await listEntries();
+async function lookup(n, folder = dirHandle) {
+  const entries = await listEntries(folder);
   const dumpFile = await findDumpFile(entries);
   if (!dumpFile) return { ok: false, error: "В папке нет выгрузка.xlsx и нет document*.xls(x)." };
   let rows;
@@ -119,8 +111,6 @@ async function lookup(n) {
   catch (e) { return { ok: false, error: e.message }; }
   const act = rows.find((x) => x.act_no === n);
   if (!act) return { ok: false, error: "Номера " + n + " нет в выгрузке." };
-  const before = findPhotoEntry(entries, n, 1);
-  const after = findPhotoEntry(entries, n, 2);
   let block = "";
   if (act.status === "Закрыто") block = "Строка закрыта, акт не собираю.";
   else if (act.status === "Удалено") block = "Строка удалена, акта нет.";
@@ -131,9 +121,7 @@ async function lookup(n) {
   if (intMap[String(act.act_no)]) act.integration = intMap[String(act.act_no)];
   return {
     ok: true, act, act_date: todayStr(),
-    before: before ? before.name : null, after: after ? after.name : null,
-    beforeUrl: before ? URL.createObjectURL(await before.handle.getFile()) : null,
-    afterUrl: after ? URL.createObjectURL(await after.handle.getFile()) : null,
+    photos: RemarkPhotos.index(entries).get(n) || [], folder,
     can_build: !block, block,
   };
 }
@@ -285,22 +273,6 @@ async function loadWorkspace(dir, legacy, dump) {
   dumpDate = dump.date;
   dirHandle = dir;
 }
-async function savePhoto(n, slot, file, folder) {
-  if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
-  const jpeg = await toJpeg(file);
-  const name = n + "_" + slot + ".jpg";
-  const old = findPhotoEntry(await listEntries(folder), n, slot);
-  const fh = await folder.getFileHandle(name, { create: true });
-  const writer = await fh.createWritable();
-  try {
-    await writer.write(jpeg.bytes);
-    await writer.close();
-  } catch (error) {
-    await writer.abort().catch(() => {});
-    throw error;
-  }
-  if (old && old.name !== name) await folder.removeEntry(old.name);
-}
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -319,19 +291,11 @@ async function renderOpen() {
     return;
   }
   const sorted = [...openRows].sort((a, b) => sortDesc ? b.act_no - a.act_no : a.act_no - b.act_no);
-  const entries = await listEntries(folder);
+  const photos = RemarkPhotos.index(await listEntries(folder));
   let rows = "";
   for (const r of sorted) {
     const raw = comments[String(r.act_no)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
-    const before = findPhotoEntry(entries, r.act_no, 1);
-    const after = findPhotoEntry(entries, r.act_no, 2);
-    const beforeUrl = before ? URL.createObjectURL(await before.handle.getFile()) : "";
-    const afterUrl = after ? URL.createObjectURL(await after.handle.getFile()) : "";
-    const mini = '<div class="mini-photos">' +
-      (beforeUrl ? '<img src="' + beforeUrl + '" data-full="' + beforeUrl + '" data-pick="' + r.act_no + ':1" title="ДО">' : '<div class="ph" data-pick="' + r.act_no + ':1">+</div>') +
-      (afterUrl ? '<img src="' + afterUrl + '" data-full="' + afterUrl + '" data-pick="' + r.act_no + ':2" title="ПОСЛЕ">' : '<div class="ph" data-pick="' + r.act_no + ':2">+</div>') +
-      '</div>';
     rows += '<tr data-remark="' + r.act_no + '">' +
       '<td><input type="checkbox" class="row-sel" data-n="' + r.act_no + '"></td>' +
       '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
@@ -339,7 +303,7 @@ async function renderOpen() {
       "<td>" + esc(r.pred_date || "—") + "</td>" +
       "<td>" + esc(r.deadline || "—") + "</td>" +
       '<td class="desc">' + esc(r.description || "—") + "</td>" +
-      '<td>' + mini + '</td>' +
+      '<td data-photo-for="' + r.act_no + '"></td>' +
       '<td><button type="button" data-resp="' + r.act_no + '">Не назначен</button></td>' +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c2" rows="2">' + esc(cc.c2 || "") + "</textarea></td>" +
@@ -375,7 +339,10 @@ async function renderOpen() {
     '<p class="kicker">новые: ' + (sequences.new.join(", ") || "—") + '</p>' +
     '</section>';
   host.insertAdjacentHTML("beforeend", seqHtml);
-  wireSlots();
+  for (const cell of host.querySelectorAll("[data-photo-for]")) {
+    const number = Number(cell.dataset.photoFor);
+    RemarkPhotos.mount(cell, number, photos.get(number) || [], folder, true);
+  }
   const sortBtn = host.querySelector("#sortBtn");
   if (sortBtn) sortBtn.addEventListener("click", () => { sortDesc = !sortDesc; sortBtn.textContent = sortDesc ? "↓" : "↑"; RemarksUI.updateTable(); });
 
@@ -424,29 +391,35 @@ function render(d) {
     '<div><span class="k">Срок</span>' + esc(a.deadline || "—") + "</div>" +
     '<div><span class="k">Дата акта</span>' + d.act_date + "</div>" +
     '<div><span class="k">Замечание</span>' + esc(a.description || "—") + "</div></div></section>" +
-    '<section class="tape-wrap"><div class="photos">' +
-    slotHtml(a.act_no, 1, "до", d.before, d.beforeUrl) +
-    slotHtml(a.act_no, 2, "после", d.after, d.afterUrl) +
-    "</div></section>";
+    '<section class="tape-wrap" data-photo-for="' + a.act_no + '"></section>';
+  RemarkPhotos.mount($("out").querySelector("[data-photo-for]"), a.act_no, d.photos, d.folder);
 }
 
-function slotHtml(n, slot, label, name, url) {
-  const img = url
-    ? '<img src="' + url + '" alt="" data-full="' + url + '" data-pick="' + n + ':' + slot + '" style="cursor:pointer">'
-    : '<div class="ph">Добавить фото ' + label + '</div>';
-  const chgBtn = '<button type="button" class="chg" data-pick="' + n + ':' + slot + '">' + (url ? "Заменить" : "Добавить") + '</button>';
-  return '<figure class="slot">' + img +
-    '<div class="btns">' + chgBtn + '</div>' +
-    '<figcaption class="kicker">' + label + " · " + esc(name || "нет " + n + "_" + slot) + "</figcaption></figure>";
-}
-async function toJpeg(file) {
-  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+async function toJpeg(file, normalized = false) {
+  const bitmap = await createImageBitmap(file, {imageOrientation: "from-image"});
   const canvas = document.createElement("canvas");
-  canvas.width = bmp.width; canvas.height = bmp.height;
-  canvas.getContext("2d").drawImage(bmp, 0, 0);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), w: bmp.width, h: bmp.height };
+  try {
+    if (normalized) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes[0] === 0xff && bytes[1] === 0xd8) return {bytes, w: bitmap.width, h: bitmap.height};
+    }
+    const scale = Math.min(1, 3000 / Math.max(bitmap.width, bitmap.height),
+      Math.sqrt(6_000_000 / bitmap.width / bitmap.height));
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d", {alpha: false});
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", .94));
+    if (!blob) throw new Error("Не удалось подготовить изображение.");
+    return {bytes: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height};
+  } finally {
+    bitmap.close();
+    canvas.width = canvas.height = 0;
+  }
 }
+
 function drawingXml(rid, docId, name, cx, cy) {
   return '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:drawing>' +
     '<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
@@ -463,20 +436,76 @@ function drawingXml(rid, docId, name, cx, cy) {
 function appXml() {
   return '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/></w:rPr><w:t>Приложение 1</w:t></w:r></w:p>';
 }
-function ensureRel(rels, rid, target) {
-  if (rels.includes('Id="' + rid + '"')) {
-    return rels.replace(new RegExp('<Relationship Id="' + rid + '"[^>]*/>'),
-      '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + target + '"/>');
+async function appendWordPhotos(zip, xml, entries) {
+  const parser = new DOMParser();
+  const documentXml = parser.parseFromString(xml, "application/xml");
+  const relsPath = "word/_rels/document.xml.rels";
+  const relsXml = parser.parseFromString(await zip.file(relsPath).async("string"), "application/xml");
+  if (documentXml.querySelector("parsererror") || relsXml.querySelector("parsererror")) {
+    throw new Error("Не удалось прочитать структуру шаблона акта.");
   }
-  return rels.replace("</Relationships>",
-    '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + target + '"/></Relationships>');
+
+  const w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+  const pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+  const relNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const existingIds = new Set([
+    ...documentXml.getElementsByTagNameNS(wp, "docPr"),
+    ...documentXml.getElementsByTagNameNS(pic, "cNvPr")
+  ].map(element => Number(element.getAttribute("id"))));
+  const existingRels = new Set([...relsXml.getElementsByTagNameNS(relNamespace, "Relationship")]
+    .map(element => element.getAttribute("Id")));
+  const section = [...documentXml.getElementsByTagNameNS(w, "sectPr")].at(-1);
+  const size = section?.getElementsByTagNameNS(w, "pgSz")[0];
+  const margins = section?.getElementsByTagNameNS(w, "pgMar")[0];
+  const twips = (node, key, fallback) => {
+    const value = node?.getAttributeNS(w, key);
+    return value != null && Number.isFinite(Number(value)) ? Number(value) : fallback;
+  };
+  const width = Math.min(CX, 635 * Math.max(300, twips(size, "w", 11906) -
+    twips(margins, "left", 1134) - twips(margins, "right", 707) - twips(margins, "gutter", 0)));
+  const height = Math.min(7_800_000, 635 * Math.max(300, twips(size, "h", 16838) -
+    twips(margins, "top", 1134) - twips(margins, "bottom", 709) - 1000));
+
+  const paragraphs = [appXml()];
+  let docId = 1, relId = 1, imageId = 1;
+  for (const entry of entries) {
+    let image;
+    try {
+      const file = await entry.handle.getFile();
+      image = await toJpeg(file, entry.normalized);
+    } catch {
+      throw new Error("Не удалось прочитать вложение «" + entry.name + "».");
+    }
+    while (existingIds.has(docId)) docId++;
+    while (existingRels.has("rId" + relId)) relId++;
+    let path;
+    do { path = "media/remark-photo-" + imageId++ + ".jpg"; } while (zip.file("word/" + path));
+
+    const rid = "rId" + relId++;
+    const rel = relsXml.createElementNS(relNamespace, "Relationship");
+    rel.setAttribute("Id", rid);
+    rel.setAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
+    rel.setAttribute("Target", path);
+    relsXml.documentElement.append(rel);
+    zip.file("word/" + path, image.bytes);
+
+    const scale = Math.min(width / image.w, height / image.h);
+    paragraphs.push(drawingXml(rid, docId++, "Фото " + paragraphs.length,
+      Math.max(1, Math.round(image.w * scale)), Math.max(1, Math.round(image.h * scale))));
+  }
+  const point = xml.lastIndexOf("<w:sectPr");
+  if (point < 0) throw new Error("В шаблоне нет раздела страницы.");
+  zip.file(relsPath, new XMLSerializer().serializeToString(relsXml));
+  return xml.slice(0, point) + paragraphs.join("") + xml.slice(point);
 }
-async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, beforeFile, afterFile }) {
+
+async function buildAct({ templateBuf, actNo, integration, actDate, predDate, deadline, description, photoEntries }) {
   const zip = await JSZip.loadAsync(templateBuf);
   let xml = await zip.file("word/document.xml").async("string");
   const useNo = String(integration || "").trim() || String(actNo);
   const map = {
-    "{{НОМЕР-АКТА}}": useNo,
+    "{{НОМЕР-АКТА}}": xmlEscape(useNo),
     "{{ДАТА-АКТА-ТЕКСТ}}": ruQuoted(actDate),
     "{{ДАТА-ПРЕДПИСАНИЯ-ТЕКСТ}}": ruQuoted(predDate) + "г.",
     "{{ОПИСАНИЕ}}": xmlEscape(description),
@@ -502,28 +531,13 @@ async function buildAct({ templateBuf, actNo, integration, actDate, predDate, de
   if (!xml.includes("xmlns:a=")) {
     xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
   }
-  let photos = "";
-  let relsExtra = "";
-  if (beforeFile) {
-    const before = await toJpeg(beforeFile);
-    zip.file("word/media/image3.jpg", before.bytes);
-    photos += drawingXml("rId13", 20, "foto_do", CX, Math.round(CX * before.h / before.w));
-    relsExtra += "rId13 ";
+  if (photoEntries.length) {
+    xml = await appendWordPhotos(zip, xml, photoEntries);
+  } else {
+    const path = "word/_rels/document.xml.rels";
+    zip.file(path, await zip.file(path).async("string"));
   }
-  if (afterFile) {
-    const after = await toJpeg(afterFile);
-    zip.file("word/media/image4.jpg", after.bytes);
-    photos += drawingXml("rId14", 21, "foto_posle", CX, Math.round(CX * after.h / after.w));
-    relsExtra += "rId14 ";
-  }
-  if (photos) photos = appXml() + photos;
-  if (!xml.includes("<w:sectPr")) throw new Error("В шаблоне нет раздела страницы.");
-  xml = xml.replace("<w:sectPr", photos + "<w:sectPr");
   zip.file("word/document.xml", xml);
-  let rels = await zip.file("word/_rels/document.xml.rels").async("string");
-  if (beforeFile) rels = ensureRel(rels, "rId13", "media/image3.jpg");
-  if (afterFile) rels = ensureRel(rels, "rId14", "media/image4.jpg");
-  zip.file("word/_rels/document.xml.rels", rels);
   let ct = await zip.file("[Content_Types].xml").async("string");
   // Всегда гарантируем корректные ContentType для jpg и jpeg.
   // Старый код добавлял их только если не было ни одного из расширений,
@@ -539,14 +553,12 @@ function actName(n, integration) {
 }
 async function saveAct(n, folder) {
   if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
-  const info = await lookup(n);
+  const info = await lookup(n, folder);
   if (!info.ok) throw new Error(info.error);
   if (!info.can_build) throw new Error(info.block);
-  const entries = await listEntries();
+  const entries = await listEntries(folder);
   const templateFile = await fileByName(entries, "shablon-akt.docx");
   const templateBuf = templateFile ? await templateFile.arrayBuffer() : await embeddedTemplate();
-  const before = findPhotoEntry(entries, n, 1);
-  const after = findPhotoEntry(entries, n, 2);
   const blob = await buildAct({
     templateBuf,
     actNo: n,
@@ -555,8 +567,7 @@ async function saveAct(n, folder) {
     predDate: info.act.pred_date,
     deadline: info.act.deadline,
     description: info.act.description,
-    beforeFile: before ? await before.handle.getFile() : null,
-    afterFile: after ? await after.handle.getFile() : null,
+    photoEntries: info.photos,
   });
   const name = actName(n, info.act.integration);
   if (folder !== dirHandle) throw new Error("Рабочая папка изменилась.");
@@ -584,6 +595,9 @@ function expandNumbers(raw) {
 }
 $("num").addEventListener("input", () => {
   clearTimeout(timer);
+  ready = false;
+  $("go").disabled = true;
+  $("pdfBtn").disabled = true;
   timer = setTimeout(async () => {
     const raw = $("num").value.trim();
     const nos = expandNumbers(raw);
@@ -591,10 +605,9 @@ $("num").addEventListener("input", () => {
     if (nos.length === 1) {
       const folder = dirHandle;
       try {
-        const info = await lookup(nos[0]);
+        const info = await lookup(nos[0], folder);
         if (folder !== dirHandle || raw !== $("num").value.trim()) return;
         render(info);
-        wireSlots();
         $("pdfBtn").disabled = !info.ok || info.act.status !== "К устранению";
       } catch (error) {
         if (folder === dirHandle) $("hint").textContent = error.message;
@@ -609,6 +622,10 @@ $("num").addEventListener("input", () => {
 });
 $("go").addEventListener("click", async () => {
   if (!ready) return;
+  if (RemarkPhotos.busy()) {
+    $("hint").textContent = "Дождитесь окончания записи вложений.";
+    return;
+  }
   $("go").disabled = true;
   const nos = expandNumbers($("num").value);
   $("hint").textContent = "Собираю " + nos.length + "…";
@@ -654,80 +671,3 @@ async function downloadPdf(bytes, name) {
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
   }, 0);
 }
-
-function wireSlots() {
-  document.querySelectorAll("[data-pick]").forEach((el) => {
-    if (el.dataset.full) return; // photos with data-full open fullscreen via document listener
-    el.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const [n, slot] = el.dataset.pick.split(":");
-      armPhotoPick(n, slot);
-    });
-  });
-}
-let photoTarget = null;
-function armPhotoPick(n, slot) {
-  const num = Number(n);
-  const sl = Number(slot);
-  if (!Number.isFinite(num) || !Number.isFinite(sl)) return;
-  photoTarget = { n: num, slot: sl, folder: dirHandle };
-  const inp = $("photoIn");
-  inp.dataset.n = String(num);
-  inp.dataset.slot = String(sl);
-  inp.value = "";
-  inp.click();
-}
-$("photoIn").addEventListener("change", async () => {
-  const file = $("photoIn").files && $("photoIn").files[0];
-  if (!file) return;
-  const target = photoTarget || {
-    n: Number($("photoIn").dataset.n),
-    slot: Number($("photoIn").dataset.slot),
-  };
-  const n = target.n;
-  const slot = target.slot;
-  photoTarget = null;
-  if (!Number.isFinite(n) || !Number.isFinite(slot)) {
-    $("hint").textContent = "";
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">Не понял, какое фото заменять.</div>');
-    return;
-  }
-  $("hint").textContent = "Сохраняю фото…";
-  try {
-    await savePhoto(n, slot, file, target.folder);
-    const shown = expandNumbers(($("num").value || "").trim());
-    if (shown.length === 1 && shown[0] === n) render(await lookup(n));
-    await renderOpen();
-    $("hint").textContent = "Фото сохранено: " + n + "_" + slot + ".jpg";
-  } catch (e) {
-    $("hint").textContent = "";
-    $("out").insertAdjacentHTML("afterbegin", '<div class="msg bad">' + (e.message || "Не удалось сохранить фото.") + "</div>");
-  }
-});
-
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-full]");
-  if (!btn) return;
-  e.stopPropagation();
-  const url = btn.dataset.full;
-  const pick = btn.dataset.pick || "";
-  const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center";
-  overlay.innerHTML = '<img src="' + url + '" style="max-width:96%;max-height:96%;object-fit:contain"><div style="position:absolute;top:12px;right:12px;display:flex;gap:6px"><button id="fs-replace" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Заменить</button><button id="fs-close" style="background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer">Закрыть</button></div>';
-  overlay.querySelector("#fs-close").onclick = () => overlay.remove();
-  overlay.querySelector("#fs-replace").onclick = (ev) => {
-    ev.stopPropagation();
-    const [n, slot] = String(pick).split(":");
-    overlay.remove();
-    armPhotoPick(n, slot);
-  };
-  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
-  const onEsc = (e) => { if (e.key === "Escape") close(); };
-  function close() {
-    overlay.remove();
-    document.removeEventListener("keydown", onEsc);
-  }
-  document.addEventListener("keydown", onEsc);
-  document.body.appendChild(overlay);
-});
-

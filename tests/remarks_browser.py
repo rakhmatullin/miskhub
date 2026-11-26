@@ -258,11 +258,11 @@ def cases(chromium, origin, profile):
     expect(row(page,125)).to_contain_text("архив")
     new_docx = docx(page)
     stable = snapshot(page)
-    page.locator(".version-switch a").click()
+    page.locator('.version-switch a[href="./sborka-v2.8.html"]').click()
     expect(page.locator(".row-sel")).to_have_count(len(NUMBERS))
     assert new_docx == docx(page)
     assert all(snapshot(page)[file] == stable[file] for file in (PEOPLE, LINKS))
-    page.locator(".version-switch a").click()
+    page.locator('.version-switch a[href="./sborka.html"]').click()
     expect(row(page,125)).to_contain_text("архив")
     print("PASS  closed/disappearing remarks, browser restart, versions and DOCX parity", flush=True)
 

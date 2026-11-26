@@ -1,0 +1,41 @@
+.remarks-scroll .table th:nth-child(7) { width: 142px; }
+.remark-photo-gallery { display: grid; gap: 8px; min-width: 0; }
+.remark-photo-row {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 5px 0;
+}
+.remark-photo-row + .remark-photo-row { border-top: 1px solid var(--line); }
+.remark-photo-strip {
+  display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0;
+  overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: thin;
+}
+.remark-photo-tile { position: relative; flex: none; }
+.remark-photo-view {
+  width: 126px; height: 96px; display: block; padding: 0; overflow: hidden;
+  background: #09111e; border-radius: 8px; border: 1px solid var(--line);
+}
+.remark-photo-view img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.remark-photo-view img:not([src]) { visibility: hidden; }
+.remark-photo-view img.remark-photo-unavailable { background: #3a1820; }
+.remark-photo-add { flex: none; align-self: center; width: 37px; height: 38px; padding: 0; color: var(--acc); }
+.remark-photo-delete {
+  position: absolute; inset: auto 4px 4px auto; padding: 2px 5px; border: 0;
+  border-radius: 5px; background: #09111edb; color: #fff; font-size: 11px;
+}
+.compact .remark-photo-row { gap: 3px; padding: 2px 0; }
+.compact .remark-photo-strip { gap: 4px; }
+.compact .remark-photo-view { width: 39px; height: 34px; border-radius: 5px; }
+.compact .remark-photo-view img { object-fit: cover; }
+.compact .remark-photo-add { width: 24px; height: 30px; font-size: 15px; border-radius: 5px; }
+.compact .remark-photo-delete { inset: 1px 1px auto auto; font-size: 12px; padding: 0; width: 15px; height: 15px; line-height: 1; }
+.remark-photo-busy :is(.remark-photo-add,.remark-photo-delete,#remark-photo-remove) { opacity: .5; cursor: wait; }
+#remark-photo-preview {
+  inset: 0; width: 100%; height: 100dvh; max-width: none; max-height: none;
+  margin: 0; padding: 12px; border: 0; background: #070b14; color: var(--text);
+}
+#remark-photo-preview[open] { display: flex; flex-direction: column; }
+#remark-photo-preview img { margin: auto; min-height: 0; max-width: 100%; max-height: calc(100% - 48px); object-fit: contain; }
+#remark-photo-preview .toolbar { justify-content: flex-end; margin: 0; }
+#remark-photo-preview-status { text-align: center; color: var(--mute); }
+#remark-photo-preview-status:empty { display: none; }
+#remark-photo-status { margin-top: 10px; }
