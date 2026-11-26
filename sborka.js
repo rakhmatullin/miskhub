@@ -1,8 +1,9 @@
-/* v2.12 */
+/* v2.13 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const CX = 5240000;
 const TPL_URL = "./shablon-akt.b64";
+const EXON_DUMP_NAMES = {xls: "реестр-экзон.xls", xlsx: "реестр-экзон.xlsx"};
 
 const $ = (id) => document.getElementById(id);
 let dirHandle = null;
@@ -79,17 +80,18 @@ async function fileByName(entries, name) {
 }
 async function findDumpFile(entries) {
   const classic = entries.find((e) => e.name.toLowerCase() === "выгрузка.xlsx");
-  if (classic) return classic.handle.getFile();
   const docs = [];
   for (const e of entries) {
     const low = e.name.toLowerCase();
-    if (low.includes("document") && (low.endsWith(".xls") || low.endsWith(".xlsx"))) {
+    const exon = Object.values(EXON_DUMP_NAMES).includes(low);
+    if (exon || e === classic || (!classic && low.includes("document") && /\.xlsx?$/.test(low))) {
       const f = await e.handle.getFile();
-      docs.push({ entry: e, file: f, mtime: f.lastModified });
+      if (exon && !f.size) continue;
+      docs.push({file: f, exon});
     }
   }
   if (!docs.length) return null;
-  docs.sort((a, b) => b.mtime - a.mtime);
+  docs.sort((a, b) => b.file.lastModified - a.file.lastModified || Number(b.exon) - Number(a.exon));
   return docs[0].file;
 }
 function pill(text, cls) { return '<span class="pill ' + (cls || "") + '">' + text + "</span>"; }
@@ -105,7 +107,7 @@ async function embeddedTemplate() {
 async function lookup(n, folder = dirHandle) {
   const entries = await listEntries(folder);
   const dumpFile = await findDumpFile(entries);
-  if (!dumpFile) return { ok: false, error: "В папке нет выгрузка.xlsx и нет document*.xls(x)." };
+  if (!dumpFile) return { ok: false, error: "В папке нет выгрузки. Обновите реестр или добавьте Excel-файл Экзона." };
   let rows;
   try { rows = parseDump(await dumpFile.arrayBuffer()); }
   catch (e) { return { ok: false, error: e.message }; }
@@ -286,11 +288,15 @@ async function loadWorkspace(dir, legacy, dump) {
     ? await editLegacy(dir, SEQ_FILE, data => reconcileSequences(data, dump.rows.map(row => row.act_no)))
     : legacy.sequences;
   ({comments, intMap, colNames} = legacy);
+  applyOpenDump(dump, savedSequences);
+  dirHandle = dir;
+}
+
+function applyOpenDump(dump, savedSequences) {
   for (const row of dump.rows) row.integration = intMap[row.act_no] || row.integration;
   sequences = savedSequences;
   openRows = dump.rows;
   dumpDate = dump.date;
-  dirHandle = dir;
 }
 function esc(s) {
   return String(s == null ? "" : s)

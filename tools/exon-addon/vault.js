@@ -41,7 +41,8 @@ const ExonVault = (() => {
       if (!key) throw new Error("Для этого файла нужен исходный профиль браузера.");
       const clear = await crypto.subtle.decrypt({name: "AES-GCM", iv: decode(nonce), additionalData: aad}, key, decode(ciphertext));
       const record = JSON.parse(new TextDecoder().decode(clear));
-      if (typeof record.login !== "string" || typeof record.password !== "string") throw new Error();
+      if (typeof record.login !== "string" || typeof record.password !== "string" ||
+          (record.remarksUrl !== undefined && typeof record.remarksUrl !== "string")) throw new Error();
       return record;
     } catch (error) {
       const details = error.message && (error.name === "Error") ? " " + error.message : "";
