@@ -1,0 +1,28 @@
+.version-switch { flex-wrap: wrap; max-width: 100%; }
+.table button.remark-number {
+  background: transparent; border: 0; border-radius: 3px; padding: 0;
+  color: var(--acc); text-align: left; font: inherit; font-weight: 700;
+  overflow-wrap: anywhere;
+}
+#remark-details {
+  width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+  overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px;
+}
+.remark-details-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 8px;
+}
+#remark-details-close { padding: 4px 10px; font-size: 20px; line-height: 1.2; }
+#remark-details-exon {
+  padding: 7px 12px; color: var(--text); background: #1c4d86;
+  border-color: #2b6cb0; text-decoration: none;
+}
+#remark-details-exon-hint { color: var(--mute); margin: 4px 0; font-size: 13px; }
+#remark-details-content .tape-wrap { padding: 10px 12px; margin: 12px 0 4px; }
+#remark-details-content .meta div { display: grid; grid-template-columns: minmax(108px, 25%) minmax(0, 1fr); gap: 12px; }
+#remark-details-content .meta .k { width: auto; overflow-wrap: anywhere; }
+#remark-details-content .remark-meta-value { overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 400px) {
+  #remark-details { padding: 10px; }
+  #remark-details-content .meta div { gap: 8px; }
+}

@@ -23,8 +23,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, respond) => {
 });
 
 chrome.runtime.onConnectExternal.addListener(port => {
-  const current = fromHub(port.sender, "sborka.html");
-  if (port.name !== "miskhub-remarks-refresh" || (!current && !fromHub(port.sender, "sborka-v2.13.html"))) {
+  const withAttachments = fromHub(port.sender, "sborka.html") || fromHub(port.sender, "sborka-v2.14.html");
+  if (port.name !== "miskhub-remarks-refresh" || (!withAttachments && !fromHub(port.sender, "sborka-v2.13.html"))) {
     port.disconnect();
     return;
   }
@@ -56,7 +56,8 @@ chrome.runtime.onConnectExternal.addListener(port => {
       throw new Error("«Замечания» не передали список актов для обновления.");
     }
     const catalog = await ExonRemarkFiles.catalog(read, wanted, announce);
-    const request = await ask({type: "catalog", project, integration: catalog.integration, files: catalog.files}, "files");
+    const {integration, remarkIds, files: attachments} = catalog;
+    const request = await ask({type: "catalog", project, integration, remarkIds, files: attachments}, "files");
     if (!Array.isArray(request.ids)) throw new Error("«Замечания» не передали список вложений.");
     const requested = new Set(request.ids);
     const files = catalog.files.filter(file => requested.has(file.id));
@@ -89,9 +90,9 @@ chrome.runtime.onConnectExternal.addListener(port => {
     }
     if (started || message?.type !== "refresh") return;
     started = true;
-    const includeAttachments = current && message.protocol === 2;
+    const includeAttachments = withAttachments && [2, 3].includes(message.protocol);
     (async () => {
-      send({type: "connected", protocol: 2});
+      send({type: "connected", protocol: message.protocol === 3 ? 3 : 2});
       let settings, target;
       try {
         const saved = await ExonVault.restore();

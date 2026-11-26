@@ -1,4 +1,4 @@
-/* v2.14 */
+/* v2.15 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const CX = 5240000;
@@ -104,12 +104,15 @@ async function embeddedTemplate() {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 }
-async function lookup(n, folder = dirHandle) {
+async function lookup(n, folder = dirHandle, includeExonLink = false) {
   const entries = await listEntries(folder);
   const dumpFile = await findDumpFile(entries);
   if (!dumpFile) return { ok: false, error: "В папке нет выгрузки. Обновите реестр или добавьте Excel-файл Экзона." };
-  let rows;
-  try { rows = parseDump(await dumpFile.arrayBuffer()); }
+  let bytes, rows;
+  try {
+    bytes = await dumpFile.arrayBuffer();
+    rows = parseDump(bytes);
+  }
   catch (e) { return { ok: false, error: e.message }; }
   const act = rows.find((x) => x.act_no === n);
   if (!act) return { ok: false, error: "Номера " + n + " нет в выгрузке." };
@@ -121,8 +124,9 @@ async function lookup(n, folder = dirHandle) {
   else if (!act.deadline) block = "В строке нет срока устранения.";
   else if (!act.description) block = "В строке нет текста замечания.";
   if (intMap[String(act.act_no)]) act.integration = intMap[String(act.act_no)];
+  const exonUrl = includeExonLink ? await remarkExonUrl(folder, n, bytes) : "";
   return {
-    ok: true, act, act_date: todayStr(),
+    ok: true, act, act_date: todayStr(), exonUrl,
     photos: RemarkPhotos.index(entries).get(n) || [], folder,
     can_build: !block, block,
   };
@@ -130,6 +134,7 @@ async function lookup(n, folder = dirHandle) {
 
 const COMMENTS_FILE = "комментарии.json";
 const INT_MAP_FILE = "интеграционные.json";
+const EXON_LINKS_FILE = "ссылки-экзон.json";
 const COL_FILE = "названия_комментариев.json";
 const SEQ_FILE = "последовательности_актов.json";
 const defaultColumns = {c1: "Комментарий", c2: "Примечание"};
@@ -141,7 +146,12 @@ function dictionary(value) {
 }
 
 function validLegacy(name, data) {
-  if (!dictionary(data) || Object.hasOwn(data, "schemaVersion")) return false;
+  if (!dictionary(data)) return false;
+  if (name === EXON_LINKS_FILE) {
+    return data.schemaVersion === 1 && typeof data.digest === "string" && /^[a-f0-9]{64}$/.test(data.digest) &&
+      validExonId(data.project) && dictionary(data.ids) && Object.entries(data.ids).every(([n, id]) => /^-?\d+$/.test(n) && validExonId(id));
+  }
+  if (Object.hasOwn(data, "schemaVersion")) return false;
   if (name === SEQ_FILE) {
     return ["open", "closed", "new"].every(key => Array.isArray(data[key]) && data[key].every(Number.isSafeInteger));
   }
@@ -152,6 +162,25 @@ function validLegacy(name, data) {
     if (name === INT_MAP_FILE) return typeof item === "string" || typeof item === "number";
     return typeof item === "string" || (dictionary(item) && validColumns(item));
   });
+}
+
+function validExonId(id) {
+  return typeof id === "string" && /^[\w-]{1,128}$/.test(id);
+}
+
+async function registryDigest(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function remarkExonUrl(folder, n, bytes) {
+  try {
+    const {data} = await readLegacy(folder, EXON_LINKS_FILE);
+    if (!data.ids?.[n] || data.digest !== await registryDigest(bytes)) return "";
+    return "https://exon.exonproject.ru/projects/" + data.project + "/buildControl/remarks/" + data.ids[n];
+  } catch {
+    return "";
+  }
 }
 
 async function readLegacy(dir, name) {
@@ -348,7 +377,7 @@ async function renderOpen() {
     const descriptionId = "remark-description-" + r.act_no;
     rows += '<tr data-remark="' + r.act_no + '">' +
       '<td><input type="checkbox" class="row-sel" data-n="' + r.act_no + '"></td>' +
-      '<td class="num" data-go="' + r.act_no + '">' + esc(number) + "</td>" +
+      '<td><button type="button" class="num remark-number" data-go="' + r.act_no + '" aria-haspopup="dialog">' + esc(number) + "</button></td>" +
       '<td class="remark-dates">' + esc(r.pred_date || "—") + '<br>' + esc(r.deadline ? "- " + r.deadline : "—") + "</td>" +
       '<td class="desc"><div class="remark-description" id="' + descriptionId + '">' + esc(r.description || "—") + '</div>' +
       '<button type="button" class="remark-description-toggle" aria-controls="' + descriptionId + '" aria-expanded="false" hidden>Развернуть</button></td>' +
@@ -374,14 +403,6 @@ async function renderOpen() {
   host.querySelectorAll(".colname").forEach(el => {
     el.addEventListener("change", () => updateColName(el.dataset.col, el.value));
   });
-  host.querySelectorAll("[data-go]").forEach((el) => {
-    el.addEventListener("click", () => {
-      $("num").value = el.dataset.go;
-      $("num").dispatchEvent(new Event("input"));
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  });
-
   // sequences display
   const seqHtml = '<section class="tape-wrap" style="margin-top:16px"><div class="open-head"><strong>Последовательности актов</strong></div>' +
     '<p class="kicker">К устранению: ' + (sequences.open.join(", ") || "—") + '</p>' +
@@ -431,18 +452,21 @@ function render(d) {
   ready = d.can_build;
   $("go").disabled = !d.can_build;
   $("hint").textContent = d.can_build ? "" : d.block;
+  renderRemarkInfo($("out"), d);
+}
+
+function renderRemarkInfo(host, d, extra = []) {
   const a = d.act;
-  $("out").innerHTML =
-    '<section class="tape-wrap"><div class="meta">' +
-    '<div><span class="k">Номер</span>' + a.act_no + "</div>" +
-    '<div><span class="k">Инт.номер</span>' + esc(a.integration || "—") + "</div>" +
-    '<div><span class="k">Статус</span>' + esc(a.status || "—") + "</div>" +
-    '<div><span class="k">Дата предписания</span>' + esc(a.pred_date || "—") + "</div>" +
-    '<div><span class="k">Срок</span>' + esc(a.deadline || "—") + "</div>" +
-    '<div><span class="k">Дата акта</span>' + d.act_date + "</div>" +
-    '<div><span class="k">Замечание</span>' + esc(a.description || "—") + "</div></div></section>" +
+  const fields = [
+    ["Номер", a.act_no], ["Инт.номер", a.integration], ["Статус", a.status],
+    ["Дата предписания", a.pred_date], ["Срок", a.deadline], ["Дата акта", d.act_date],
+    ["Замечание", a.description], ...extra,
+  ];
+  host.innerHTML = '<section class="tape-wrap"><div class="meta">' + fields.map(([label, value]) =>
+    '<div><span class="k">' + esc(label) + '</span><span class="remark-meta-value">' + esc(value == null || value === "" ? "—" : value) + '</span></div>'
+  ).join("") + '</div></section>' +
     '<section class="tape-wrap" data-photo-for="' + a.act_no + '"></section>';
-  RemarkPhotos.mount($("out").querySelector("[data-photo-for]"), a.act_no, d.photos, d.folder);
+  RemarkPhotos.mount(host.querySelector("[data-photo-for]"), a.act_no, d.photos, d.folder);
 }
 
 async function toJpeg(file, normalized = false) {

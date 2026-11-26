@@ -37,7 +37,7 @@
         if (finished) return;
         switch (message?.type) {
           case "connected":
-            if (message.protocol !== 2) { finish({type: "install"}); break; }
+            if (message.protocol !== 3) { finish({type: "install"}); break; }
             connected = true;
             clearTimeout(handshake);
             heartbeat = setInterval(() => port.postMessage({type: "heartbeat"}), 15000);
@@ -47,11 +47,11 @@
           case "workbook":
             report("Проверяем и сохраняем реестр…");
             plan = await saveRegistry(folder, message.workbook);
-            port.postMessage({type: "plan", ...plan});
+            port.postMessage({type: "plan", numbers: plan.numbers, open: plan.open});
             break;
           case "catalog": {
             if (!plan) throw new Error("Список вложений получен до реестра.");
-            const ids = await applyCatalog(folder, plan, message, files);
+            const ids = await applyCatalog(folder, plan, message, files, warnings);
             port.postMessage({type: "files", ids});
             break;
           }
@@ -95,7 +95,7 @@
         });
       });
       try {
-        port.postMessage({type: "refresh", protocol: 2, workspaceReady: Boolean(folder)});
+        port.postMessage({type: "refresh", protocol: 3, workspaceReady: Boolean(folder)});
       } catch {
         finish({type: "install"});
       }
@@ -109,12 +109,22 @@
     return Uint8Array.fromBase64 ? Uint8Array.fromBase64(encoded) : Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
   }
 
-  async function applyCatalog(folder, plan, message, files) {
+  async function applyCatalog(folder, plan, message, files, warnings) {
     if (folder !== dirHandle) throw new Error("Рабочая папка изменилась. Повторите обновление.");
-    if (typeof message.project !== "string" || !/^[\w-]+$/.test(message.project) || !Array.isArray(message.files)) {
+    if (!validExonId(message.project) || !Array.isArray(message.files)) {
       throw new Error("Экзон прислал некорректный список вложений.");
     }
     const numbers = new Set(plan.numbers.map(String));
+    const ids = Object.fromEntries(Object.entries(message.remarkIds || {}).filter(([n, id]) => numbers.has(n) && validExonId(id)));
+    try {
+      await editLegacy(folder, EXON_LINKS_FILE, data => {
+        const known = data.project === message.project && data.digest === plan.digest ? data.ids : {};
+        Object.assign(data, {schemaVersion: 1, digest: plan.digest, project: message.project, ids: {...known, ...ids}});
+      });
+    } catch (error) {
+      warnings.push(error.message);
+    }
+    if (folder !== dirHandle) throw new Error("Рабочая папка изменилась. Повторите обновление.");
     const integration = Object.entries(message.integration || {}).filter(([n, value]) =>
       numbers.has(n) && typeof value === "string" && value.trim() && value.length <= 120);
     if (integration.length) {
@@ -170,6 +180,7 @@
         (Number.isSafeInteger(workbook.count) && workbook.count !== rows.length)) {
       throw new Error("В файле Экзона неполный или некорректный реестр.");
     }
+    const digest = await registryDigest(bytes);
 
     await navigator.locks.request("miskhub-remarks-exon-file", async () => {
       if (folder !== dirHandle) throw new Error("Рабочая папка изменилась. Повторите обновление.");
@@ -197,7 +208,7 @@
       applyOpenDump(dump, updated);
       await refreshTable(folder);
     });
-    return {numbers: rows.map(row => row.act_no), open: rows.filter(row => row.status === "К устранению").map(row => row.act_no)};
+    return {digest, numbers: rows.map(row => row.act_no), open: rows.filter(row => row.status === "К устранению").map(row => row.act_no)};
   }
 
   button.addEventListener("click", async () => {

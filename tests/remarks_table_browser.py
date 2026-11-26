@@ -42,7 +42,7 @@ def run(chromium, origin, profile):
     def row(n):
         return page.locator(f'tr[data-remark="{n}"]')
 
-    expect(page.locator("body")).to_have_attribute("data-version", "2.14")
+    expect(page.locator("body")).to_have_attribute("data-version", "2.15")
     headings = page.locator("#open th")
     expect(headings).to_have_count(9)
     assert headings.all_text_contents()[1:6] == ["↓Номер", "Даты", "Описание", "Фото", "Ответственный"]
@@ -51,8 +51,23 @@ def run(chromium, origin, profile):
     expect(row(202).locator(".num")).to_have_text("202(007)")
     assert row(200).locator(".remark-dates").inner_text() == "25.11.2026\n- 28.11.2026"
     assert row(202).locator(".remark-dates").inner_text() == "25.11.2026\n—"
-    row(200).locator(".num").click()
-    expect(page.locator("#num")).to_have_value("200")
+    page.locator("#num").fill("201")
+    expect(page.locator("#out")).to_contain_text("Короткое замечание")
+    number = row(200).get_by_role("button", name="200(205)", exact=True)
+    number.scroll_into_view_if_needed()
+    number.focus()
+    position = page.evaluate("window.scrollY")
+    number.press("Enter")
+    detail = page.get_by_role("dialog", name="Замечание №200")
+    expect(detail).to_be_visible()
+    expect(detail).to_contain_text("Проверить результат.")
+    expect(detail).to_contain_text("Ссылка появится после обновления реестра из Exon.")
+    expect(page.locator("#num")).to_have_value("201")
+    assert page.evaluate("window.scrollY") == position
+    page.keyboard.press("Escape")
+    expect(detail).to_be_hidden()
+    expect(number).to_be_focused()
+    expect(page.locator("#out")).to_contain_text("Короткое замечание")
     page.locator("#sortBtn").click()
     expect(page.locator("#open tbody tr").first).to_have_attribute("data-remark", "200")
 
