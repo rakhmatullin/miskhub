@@ -1,0 +1,20 @@
+.remarks-scroll .table.remarks-table th { width: auto; }
+.remarks-scroll .table.remarks-table .remark-number-col { width: 94px; white-space: nowrap; }
+.remarks-scroll .table.remarks-table th.remark-dates { width: 100px; }
+.remarks-scroll .table.remarks-table .remark-photos-col { width: 142px; }
+.remarks-scroll .table.remarks-table .remark-person-col,
+.remarks-scroll .table.remarks-table .remark-comment-col { width: 13%; }
+.remarks-scroll .table.remarks-table .remark-actions { width: 51px; }
+.remarks-table .remark-dates { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.remarks-table .desc { max-width: none; }
+.remark-description { white-space: pre-wrap; }
+.remark-description:not(.is-expanded) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+.remark-description-toggle { margin-top: 4px; padding: 3px 8px; font-size: 12px; color: var(--acc); }
+@media (max-width: 450px) {
+  .top { flex-wrap: wrap; gap: 7px; }
+}

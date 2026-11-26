@@ -1,4 +1,4 @@
-/* v2.11 */
+/* v2.12 */
 /* MiskHub sborka — сборка акта на GitHub Pages */
 const MONTHS = ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const CX = 5240000;
@@ -297,6 +297,28 @@ function esc(s) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+const openHost = $("open");
+const descriptionObserver = new ResizeObserver(entries => {
+  for (const {target} of entries) {
+    if (target.classList.contains("is-expanded")) continue;
+    target.nextElementSibling.hidden = target.scrollHeight <= target.clientHeight;
+  }
+});
+new MutationObserver(() => {
+  descriptionObserver.disconnect();
+  for (const text of openHost.querySelectorAll(".remark-description")) descriptionObserver.observe(text);
+}).observe(openHost, {childList: true});
+
+openHost.addEventListener("click", event => {
+  const toggle = event.target.closest(".remark-description-toggle");
+  if (!toggle) return;
+  const text = $(toggle.getAttribute("aria-controls"));
+  const expanded = text.classList.toggle("is-expanded");
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.textContent = expanded ? "Свернуть" : "Развернуть";
+  if (!expanded) toggle.hidden = text.scrollHeight <= text.clientHeight;
+});
+
 let renderVersion = 0;
 async function renderOpen() {
   const version = ++renderVersion;
@@ -315,13 +337,15 @@ async function renderOpen() {
   for (const r of sorted) {
     const raw = comments[String(r.act_no)];
     const cc = (raw && typeof raw === "object") ? raw : { c1: raw || "", c2: "" };
+    const integration = String(r.integration ?? "").trim();
+    const number = r.act_no + (integration ? "(" + integration + ")" : "");
+    const descriptionId = "remark-description-" + r.act_no;
     rows += '<tr data-remark="' + r.act_no + '">' +
       '<td><input type="checkbox" class="row-sel" data-n="' + r.act_no + '"></td>' +
-      '<td class="num" data-go="' + r.act_no + '">' + r.act_no + "</td>" +
-      '<td>' + esc(r.integration || "—") + "</td>" +
-      "<td>" + esc(r.pred_date || "—") + "</td>" +
-      "<td>" + esc(r.deadline || "—") + "</td>" +
-      '<td class="desc">' + esc(r.description || "—") + "</td>" +
+      '<td class="num" data-go="' + r.act_no + '">' + esc(number) + "</td>" +
+      '<td class="remark-dates">' + esc(r.pred_date || "—") + '<br>' + esc(r.deadline ? "- " + r.deadline : "—") + "</td>" +
+      '<td class="desc"><div class="remark-description" id="' + descriptionId + '">' + esc(r.description || "—") + '</div>' +
+      '<button type="button" class="remark-description-toggle" aria-controls="' + descriptionId + '" aria-expanded="false" hidden>Развернуть</button></td>' +
       '<td data-photo-for="' + r.act_no + '"></td>' +
       '<td><button type="button" data-resp="' + r.act_no + '">Не назначен</button></td>' +
       '<td><textarea class="cmt" data-cmt="' + r.act_no + '" data-field="c1" rows="2">' + esc(cc.c1 || "") + "</textarea></td>" +
@@ -333,9 +357,9 @@ async function renderOpen() {
   host.innerHTML =
     '<section class="tape-wrap"><div class="open-head"><strong>Незакрытые акты · ' + openRows.length + '</strong>' +
     '<span class="kicker">выгрузка от ' + esc(dumpDate || "—") + '</span></div>' +
-    RemarksUI.toolbar + '<div class="remarks-scroll"><table class="table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th style="white-space:nowrap"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th>Инт.номер</th><th>Дата</th><th>Срок устранения</th><th>Описание</th><th>Фото</th><th>Ответственный</th>' +
-    '<th><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
-    '<th><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    RemarksUI.toolbar + '<div class="remarks-scroll"><table class="table remarks-table"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" title="выбрать все"></th><th class="remark-number-col"><button id="sortBtn" type="button" style="background:transparent;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 2px 0 0;vertical-align:middle">' + (sortDesc ? '\u2193' : '\u2191') + '</button>Номер</th><th class="remark-dates">Даты</th><th>Описание</th><th class="remark-photos-col">Фото</th><th class="remark-person-col">Ответственный</th>' +
+    '<th class="remark-comment-col"><input class="colname" data-col="c1" value="' + esc((colNames && colNames.c1) || 'Комментарий') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
+    '<th class="remark-comment-col"><input class="colname" data-col="c2" value="' + esc((colNames && colNames.c2) || 'Примечание') + '" style="width:110px;background:transparent;border:0;color:inherit;font:inherit" title="название столбца"></th>' +
     '<th class="remark-actions" aria-label="Действия"></th></tr></thead><tbody>' +
     rows + '</tbody></table></div><p id="respNoRows" hidden>По фильтру замечаний нет.</p></section>';
   host.querySelectorAll("[data-cmt]").forEach((el) => {
