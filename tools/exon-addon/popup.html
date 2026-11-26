@@ -3,16 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Надстройка Экзона</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; form-action 'none'">
+  <title>Реестр замечаний Экзона — MiskHub</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <header>
+    <a href="https://rakhmatullin.github.io/miskhub/exon.html">MiskHub</a>
+    <span>Экзон · v0.2.0</span>
+  </header>
   <main>
-    <h1>Экзон</h1>
-    <button type="button" id="open">Войти в Экзон</button>
-    <p>Введите логин и пароль на сайте Экзона. В рабочей вкладке появится кнопка «Скачать страницу».</p>
-    <p id="status" role="status" hidden></p>
+    <h1>Реестр замечаний Экзона</h1>
+    <form id="export-form">
+      <label for="remarks-url">Ссылка на раздел «Замечания»</label>
+      <input id="remarks-url" type="url" required placeholder="https://exon.exonproject.ru/projects/…/buildControl/remarks">
+      <fieldset>
+        <legend>Данные для входа</legend>
+        <p class="note">Если Экзон уже открыт под вашей учётной записью, поля можно оставить пустыми.</p>
+        <div class="credentials">
+          <label>Логин<input id="login" type="text" maxlength="254" autocomplete="username"></label>
+          <label>Пароль<input id="password" type="password" maxlength="1024" autocomplete="current-password"></label>
+        </div>
+        <div class="actions">
+          <button type="button" id="choose-folder">Выбрать папку</button>
+          <button type="button" id="allow-folder" hidden>Разрешить доступ</button>
+          <button type="button" id="save-login" disabled>Сохранить данные входа</button>
+        </div>
+        <p class="note" id="vault-status" role="status">Для сохранения выберите папку на компьютере.</p>
+      </fieldset>
+      <div class="actions">
+        <button class="primary" id="download" type="submit">Скачать реестр замечаний</button>
+        <button type="button" id="show-tab" hidden>Открыть вкладку Экзона</button>
+        <button type="button" id="cancel" hidden>Отменить</button>
+      </div>
+      <p id="export-status" role="status" hidden></p>
+    </form>
+    <details>
+      <summary>Скачивание HTML и ручной вход</summary>
+      <p><a href="https://exon.exonproject.ru/" target="_blank" rel="noopener noreferrer">Войти в Экзон</a></p>
+      <p>Для сохранения HTML нажмите «Скачать страницу» слева внизу вкладки Экзона. Если она была открыта до установки расширения, обновите её.</p>
+      <p><a href="https://rakhmatullin.github.io/miskhub/exon-v0.1.0.html">Предыдущая версия v0.1.0</a></p>
+    </details>
   </main>
-  <script src="popup.js"></script>
+  <script defer src="vault.js"></script>
+  <script defer src="export-page.js"></script>
+  <script defer src="export.js"></script>
+  <script defer src="popup.js"></script>
 </body>
 </html>

@@ -1,26 +1,43 @@
 :root {
-  color-scheme: light;
-  font: 14px/1.45 system-ui, sans-serif;
-  color: #152331;
-  background: #f6f8fb;
+  color-scheme: dark;
+  --bg: #070b14;
+  --card: #0e1626;
+  --line: #283957;
+  --text: #e8eefc;
+  --mute: #9eafcd;
+  --acc: #8dc6ff;
 }
-body { width: 280px; margin: 0; }
-main { padding: 18px; }
-h1 { margin: 0 0 12px; font-size: 20px; font-weight: 650; }
-button {
-  appearance: none;
-  width: 100%;
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font: inherit;
-  font-weight: 650;
-  color: #fff;
-  background: #165482;
-  cursor: pointer;
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+header {
+  display: flex; justify-content: space-between; gap: 12px; padding: 16px clamp(16px, 5vw, 32px);
+  border-bottom: 1px solid var(--line); color: var(--mute); font-size: 13px;
 }
-button:hover { background: #123f63; }
-button:focus-visible { outline: 2px solid #165482; outline-offset: 3px; }
-button:disabled { opacity: .6; }
-p { margin: 10px 0 0; color: #384b5c; }
-#status { color: #8e3526; }
+header a { text-decoration: none; color: var(--text); letter-spacing: .14em; text-transform: uppercase; }
+main { max-width: 780px; margin: 32px auto; padding: 0 18px 24px; }
+h1 { margin: 0 0 24px; font-size: clamp(26px, 5vw, 36px); line-height: 1.2; }
+fieldset, details {
+  min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  margin: 20px 0; padding: 12px 16px;
+}
+legend, label { font-weight: 600; }
+.credentials { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+input, button {
+  color: inherit; background: #101c30; border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; font: inherit;
+}
+input { width: 100%; margin-top: 5px; }
+button, summary { cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+button.primary { background: #1c4d86; border-color: #3878bd; font-weight: 600; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+a { color: var(--acc); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.note, details p { color: var(--mute); }
+.note { margin: 6px 0 10px; font-size: 13px; overflow-wrap: anywhere; }
+#vault-status { margin: 9px 0 0; }
+[data-error="true"] { color: #ff929c; }
+@media (max-width: 500px) {
+  .credentials { grid-template-columns: minmax(0, 1fr); }
+}

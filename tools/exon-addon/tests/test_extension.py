@@ -112,17 +112,6 @@ def main():
             expect(action).to_be_hidden()
             assert not errors, errors
 
-            popup = browser.new_page()
-            popup.set_content((ROOT / "popup.html").read_text())
-            popup.evaluate("""() => {
-                window.close = () => {};
-                window.chrome.tabs = {create: async ({url}) => { window.openedUrl = url; }};
-            }""")
-            popup.add_script_tag(content=(ROOT / "popup.js").read_text())
-            popup.get_by_role("button", name="Войти в Экзон").click()
-            assert popup.evaluate("window.openedUrl") == ORIGIN + "/"
-            popup.close()
-
             preview = os.getenv("EXON_PREVIEW")
             if preview:
                 target = Path(preview)
