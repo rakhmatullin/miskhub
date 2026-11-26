@@ -1,23 +1,42 @@
 {
   "manifest_version": 3,
   "name": "Экзон — надстройка",
-  "version": "0.1.0",
-  "description": "Открывает официальный вход Экзона и сохраняет HTML открытой рабочей страницы.",
+  "version": "0.2.0",
+  "description": "Скачивает реестр замечаний Экзона в XLS и сохраняет HTML-копии рабочих страниц.",
   "action": {
-    "default_title": "Надстройка Экзона",
-    "default_popup": "popup.html"
+    "default_title": "Надстройка Экзона"
   },
   "content_scripts": [
     {
-      "matches": ["https://exon.exonproject.ru/*"],
+      "matches": [
+        "https://exon.exonproject.ru/*"
+      ],
       "exclude_matches": [
         "https://exon.exonproject.ru/auth",
         "https://exon.exonproject.ru/auth/*",
         "https://exon.exonproject.ru/callback",
         "https://exon.exonproject.ru/callback/*"
       ],
-      "js": ["snapshot.js", "content.js"],
+      "js": [
+        "snapshot.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0bv7fNpsMDQSB11isOuj2OoIAim4zG1165Dv8PA1zg7xGhtnsbWVQPFjvan3T058Us2+p1e1x/Etv/wCz1D/EMX96hWWoSLUS8QtI9hJ9xLPzFcd6AD546mLorTcP8bn0+1Z6kgcH8mGSosCfXZVHidm7T8cWQ3+QBDTCdXrLCY6SiA58w21K5k+dMPkjWzJAynzjs1kLxWxYiN7tsLq6AE1KkkHdu3wjK3PwgkSfYhXVBSpThKzS7T7tcW9UCMs4UXhovejCYKWWHlIP0S7DcMwcs8zwSDCp23j8vsSvEXCyCt0dAtRu5MDf3dcLYKdl1dAaeBXOL17xG0x7F/14QIDAQAB",
+  "permissions": [
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://exon.exonproject.ru/*"
+  ],
+  "background": {
+    "service_worker": "launcher.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://rakhmatullin.github.io/miskhub/*"
+    ]
+  }
 }
