@@ -75,10 +75,11 @@
       header.top nav { max-width: 100%; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <link rel="stylesheet" href="./pdf-pages.css?v=2.2">
+  <script src="./assets/pdf-pages-v2.2/pdf-lib.min.js"></script>
+  <script src="./assets/pdf-pages-v2.2/jszip.min.js"></script>
 </head>
-<body data-page="pdf-master">
+<body data-page="pdf-master" data-version="2.2">
   <div class="bg"></div>
   <header class="top">
     <a class="brand" href="./index.html"><span>MiskHub</span></a>
@@ -86,7 +87,8 @@
       <a href="./sborka.html">Замечания</a>
       <a href="./sverka-vesov.html">Сверка весов</a>
       <a href="./ttr.html">Акт ТТР</a>
-      <a href="./pdf-master.html" class="on">PDF Master</a>
+      <a href="./pdf-master.html" class="on" aria-current="page">PDF Master</a>
+      <a href="./pdf-master-v2.1.html">v2.1</a>
     </nav>
   </header>
   <main>
@@ -98,6 +100,70 @@
     <div id="msg" class="msg" hidden></div>
     <div id="app"></div>
     <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden />
+    <section id="pdf-pages" class="tape-wrap" aria-labelledby="pdf-pages-title">
+      <div class="pdf-pages-heading">
+        <div>
+          <h2 id="pdf-pages-title">Редактор страниц PDF</h2>
+          <p class="lead">Откройте PDF, удалите лишние страницы или вставьте изображения. Нажмите на миниатюру для просмотра.</p>
+        </div>
+        <button type="button" id="pdf-pages-pick">Открыть PDF</button>
+      </div>
+      <input id="pdf-pages-file" type="file" accept=".pdf,application/pdf" hidden>
+      <input id="pdf-pages-images" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp" multiple hidden>
+      <div class="pdf-pages-actions">
+        <button type="button" id="pdf-pages-add">Добавить изображения в конец</button>
+        <button type="button" id="pdf-pages-build" class="primary" disabled>Собрать PDF</button>
+        <button type="button" id="pdf-pages-cancel" hidden>Отменить сборку</button>
+      </div>
+      <p id="pdf-pages-status" class="pdf-pages-status" role="status" hidden></p>
+      <div id="pdf-pages-workspace" hidden>
+        <div class="pdf-pages-bar">
+          <p id="pdf-pages-count"></p>
+          <form id="pdf-pages-jump-form">
+            <label for="pdf-pages-jump">Страница</label>
+            <input id="pdf-pages-jump" type="number" min="1" step="1" required inputmode="numeric">
+            <button type="submit">Перейти</button>
+          </form>
+        </div>
+        <div id="pdf-pages-viewport" tabindex="0" aria-label="Миниатюры страниц">
+          <div id="pdf-pages-space">
+            <div id="pdf-pages-grid" role="list"></div>
+          </div>
+        </div>
+      </div>
+      <dialog id="pdf-pages-viewer" aria-labelledby="pdf-pages-viewer-title">
+        <div class="pdf-pages-viewer-bar">
+          <h3 id="pdf-pages-viewer-title"></h3>
+          <div class="pdf-pages-viewer-controls">
+            <button type="button" id="pdf-pages-prev" aria-label="Предыдущая страница">←</button>
+            <button type="button" id="pdf-pages-next" aria-label="Следующая страница">→</button>
+            <button type="button" id="pdf-pages-zoom" aria-pressed="false">Увеличить</button>
+            <button type="button" id="pdf-pages-save-image">Скачать картинку</button>
+            <button type="button" id="pdf-pages-close" aria-label="Закрыть просмотр" autofocus>×</button>
+          </div>
+        </div>
+        <div id="pdf-pages-preview">
+          <p id="pdf-pages-preview-status" role="status"></p>
+          <img id="pdf-pages-picture" alt="" hidden>
+        </div>
+      </dialog>
+      <template id="pdf-pages-card">
+        <div class="pdf-page-cell" role="listitem">
+          <button type="button" class="pdf-page-thumb" data-action="view">
+            <img alt="" draggable="false" hidden>
+            <span aria-hidden="true" class="pdf-page-thumb-status">Загрузка…</span>
+          </button>
+          <div class="pdf-page-meta">
+            <span class="pdf-page-number"></span>
+            <div class="pdf-page-buttons">
+              <button type="button" data-action="insert" aria-label="Вставить изображения">+</button>
+              <button type="button" data-action="save" aria-label="Скачать картинку">↓</button>
+              <button type="button" data-action="remove" aria-label="Удалить страницу">×</button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </section>
   </main>
   <footer>
     <span><a href="./index.html">Граф</a> · <a href="./sborka.html">Сборка актов</a> · <a href="./sverka-vesov.html">Сверка весов</a> · <a href="./ttr.html">Фиксация ТТР</a></span>
@@ -105,5 +171,6 @@
   </footer>
   <script src="./pdf-master.js?v=2"></script>
   <script src="./hub-nav.js?v=12"></script>
+  <script type="module" src="./pdf-pages.js?v=2.2"></script>
 </body>
 </html>
