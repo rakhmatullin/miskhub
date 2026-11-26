@@ -1,0 +1,26 @@
+:root {
+  color-scheme: light;
+  font: 14px/1.45 system-ui, sans-serif;
+  color: #152331;
+  background: #f6f8fb;
+}
+body { width: 280px; margin: 0; }
+main { padding: 18px; }
+h1 { margin: 0 0 12px; font-size: 20px; font-weight: 650; }
+button {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 650;
+  color: #fff;
+  background: #165482;
+  cursor: pointer;
+}
+button:hover { background: #123f63; }
+button:focus-visible { outline: 2px solid #165482; outline-offset: 3px; }
+button:disabled { opacity: .6; }
+p { margin: 10px 0 0; color: #384b5c; }
+#status { color: #8e3526; }

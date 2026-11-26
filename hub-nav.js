@@ -13,7 +13,7 @@
       return path.indexOf("/" + file) !== -1;
     }
     var isIndex = /\/index\.html$|\/$/.test(location.pathname);
-    var items = isIndex ? [["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Фиксация ТТР"], ["pdf-master.html", "PDF Master"]] : [];
+    var items = isIndex ? [["sborka.html", "Замечания"], ["sverka-vesov.html", "Сверка весов"], ["ttr.html", "Фиксация ТТР"], ["pdf-master.html", "PDF Master"], ["exon.html", "Экзон"]] : [];
     nav.innerHTML = items.map(function (it) {
       return '<a href="./' + it[0] + '"' + (on(it[0]) ? ' class="on"' : "") + ">" + it[1] + "</a>";
     }).join("");
@@ -37,16 +37,27 @@
 })();
 
 (function () {
+  function addLink(nav, file, label) {
+    var route = file.replace(/\.html$/, "");
+    var existing = Array.from(nav.querySelectorAll("a[href]")).some(function (link) {
+      var segment = link.pathname.replace(/\/$/, "").split("/").pop();
+      return segment === file || segment === route;
+    });
+    if (existing) return;
+    var a = document.createElement("a");
+    a.href = "./" + file;
+    a.textContent = label;
+    a.style.cssText = "flex:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:#9ec4ff;text-decoration:none;white-space:nowrap";
+    if (location.pathname.endsWith("/" + file)) a.style.color = "#fff";
+    nav.appendChild(a);
+  }
   function ensure() {
     var nav = document.querySelector("header nav");
     if (!nav) return;
-    if (nav.querySelector('a[href*="pdf-master"]')) return;
-    var a = document.createElement("a");
-    a.href = "./pdf-master.html";
-    a.textContent = "PDF Master";
-    a.style.cssText = "flex:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:#9ec4ff;text-decoration:none;white-space:nowrap";
-    if (location.pathname.indexOf("pdf-master") !== -1) a.style.color = "#fff";
-    nav.appendChild(a);
+    addLink(nav, "pdf-master.html", "PDF Master");
+    if (/\/index\.html$|\/$/.test(location.pathname)) {
+      addLink(nav, "exon.html", "Экзон");
+    }
   }
   var n = 0;
   var t = setInterval(function () {
