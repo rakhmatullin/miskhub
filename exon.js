@@ -6,7 +6,7 @@ function requestTool() {
   const runtime = globalThis.chrome?.runtime;
   if (!runtime?.sendMessage) return false;
   return new Promise(resolve => {
-    runtime.sendMessage(extensionId, {type: "exon-open-tool", version: "0.2.1"},
+    runtime.sendMessage(extensionId, {type: "exon-open-tool", version: "0.3.0"},
       reply => resolve(!runtime.lastError && reply?.ready === true));
   });
 }
@@ -20,7 +20,7 @@ openTool.addEventListener("click", async () => {
   if (!ready) document.getElementById("exon-help").open = true;
   status.textContent = ready
     ? "Инструмент открыт во вкладке расширения."
-    : "Установите или обновите расширение до v0.2.1. Инструкция открыта ниже.";
+    : "Установите или обновите расширение до v0.3.0. Инструкция открыта ниже.";
   status.hidden = false;
   openTool.disabled = false;
 });

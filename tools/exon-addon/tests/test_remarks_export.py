@@ -160,8 +160,9 @@ bulk.onclick = () => {
         const bytes = Uint8Array.from(atob(WORKBOOK), c => c.charCodeAt(0));
         const download = document.createElement('a');
         download.href = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.ms-excel'}));
-        download.download = 'document-remarks.xls';
+        download.download = scenario.filename || 'document-remarks.xls';
         download.click();
+        URL.revokeObjectURL(download.href);
         close();
     };
     menu.querySelector('button:last-child').onclick = () => document.body.dataset.wrongAction = 'true';
@@ -215,7 +216,7 @@ async def run(chromium, profile):
         host = f"{uri.scheme}://{uri.netloc}"
         if host == TOOL:
             name = uri.path.strip("/")
-            if name not in {"popup.html", "popup.css", "popup.js", "vault.js", "export-page.js", "export.js"}:
+            if name not in {"popup.html", "popup.css", "popup.js", "vault.js", "export-page.js", "export.js", "capture.js"}:
                 return await route.abort()
             return await route.fulfill(path=ROOT / name)
         if host != ORIGIN:
@@ -267,18 +268,20 @@ async def run(chromium, profile):
         await tool.get_by_role("button", name="Выбрать папку", exact=True).click()
         await tool.get_by_label("Логин").fill("fixture@example.invalid")
         await tool.get_by_label("Пароль").fill("Синтетический пароль")
-        await tool.get_by_role("button", name="Сохранить данные входа").click()
-        await expect(tool.locator("#vault-status")).to_contain_text("Данные входа сохранены")
+        await tool.locator("#remarks-url").fill(ORIGIN + REMARKS)
+        await tool.get_by_role("button", name="Сохранить настройки").click()
+        await expect(tool.locator("#vault-status")).to_contain_text("Настройки сохранены")
         raw = await tool.evaluate("""async () => {
             const parent = await showDirectoryPicker();
             const dir = await parent.getDirectoryHandle('MISKHub Экзон');
             return (await (await dir.getFileHandle('вход.json')).getFile()).text();
         }""")
         assert set(json.loads(raw)) == {"schemaVersion", "nonce", "ciphertext"}
-        assert "fixture" not in raw and "Синтетический" not in raw
+        assert "fixture" not in raw and "Синтетический" not in raw and "/buildControl/" not in raw
         await tool.reload()
         await expect(tool.get_by_label("Логин")).to_have_value("fixture@example.invalid")
         await expect(tool.get_by_label("Пароль")).to_have_value("Синтетический пароль")
+        await expect(tool.locator("#remarks-url")).to_have_value(ORIGIN + REMARKS)
 
         async def request(url=ORIGIN + REMARKS):
             await tool.locator("#remarks-url").fill(url)
@@ -307,6 +310,19 @@ async def run(chromium, profile):
             await request()
             await receive(fixture["total"])
         assert len(attempts) == 1
+
+        case = {"total": 16, "filename": "document.xls"}
+        await tool.add_script_tag(url=TOOL + "/capture.js")
+        captured = await tool.evaluate("""async () => {
+            const saved = await ExonVault.restore();
+            const settings = await ExonVault.load(saved.dir);
+            return ExonExport.run(ExonExport.parseLink(settings.remarksUrl), settings, () => {}, () => {}, new AbortController().signal, true);
+        }""")
+        assert captured["name"] == "document.xls" and captured["count"] == 16
+        assert base64.b64decode(captured["encoded"]) == workbook
+        assert downloads.empty()
+        tab = tabs[max(tabs)]
+        assert await tab.evaluate("!Object.keys(window).some(key => key.startsWith('miskhubWorkbook-'))")
 
         for total in (34, 125):
             case = {"total": total, "explicit": True, "preserve": True}
@@ -345,7 +361,7 @@ async def run(chromium, profile):
                 """ + script + "}")
 
         await vault_file("const writer = await file.createWritable(); await writer.write('damaged'); await writer.close();")
-        await tool.get_by_role("button", name="Сохранить данные входа").click()
+        await tool.get_by_role("button", name="Сохранить настройки").click()
         await expect(tool.locator("#vault-status")).to_contain_text("Не удалось прочитать")
         assert await vault_file("return (await file.getFile()).text();") == "damaged"
     finally:
