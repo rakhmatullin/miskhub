@@ -114,7 +114,7 @@ def run(chromium, origin, profile):
     put_bytes(page, "shablon-akt.docx", custom_template())
     page.locator("#pick").click()
     page.locator("#continueMigration").click()
-    expect(page.locator("body")).to_have_attribute("data-version", "2.13")
+    expect(page.locator("body")).to_have_attribute("data-version", "2.14")
     mini = page.locator('tr[data-remark="126"] [data-photo-for="126"]')
     expect(mini.locator(".remark-photo-row")).to_have_count(2)
     expect(mini.locator(".remark-photo-tile")).to_have_count(2)

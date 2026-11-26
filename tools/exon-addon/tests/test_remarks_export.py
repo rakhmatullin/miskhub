@@ -169,13 +169,48 @@ bulk.onclick = () => {
 };
 draw();
 drawRows();
+if (scenario.catalog) {
+    const tableRows = [
+        {id:'a', number:126, integrationBusNumber:605},
+        {id:'b', number:127, integrationBusNumber:606},
+        {id:'c', number:128, integrationBusNumber:607}
+    ];
+    lookup('[role=grid]')['__reactFiber$fixture'] = {return:{memoizedProps:{rows:tableRows}}};
+    window.fixtureReads = [];
+    const api = {
+        skService:{remarkV2:{
+            async getAllByProjectId() { fixtureReads.push('registry'); return tableRows; },
+            async getByIdsAndPermissions({data, projectId}) {
+                fixtureReads.push(['batch', data, projectId]);
+                return tableRows.filter(row => data.includes(row.id)).map(row => ({...row,
+                    descriptionAttachments:[{type:'FILE',link:'image1',name:'Фото.png'}, {type:'FILE',link:'archive',name:'Архив.zip'}]
+                }));
+            },
+            async getByIdAndProjectId() { fixtureReads.push('detail'); throw new Error('Unexpected request'); }
+        }},
+        fileService:{file:{async getBlob({id}) {
+            fixtureReads.push(['file',id]);
+            return new Blob(['fixture image'], {type:'image/png'});
+        }}}
+    };
+    const runtime = () => ({d9:api});
+    runtime.m = {62431: function d9() {}};
+    const registered = new Set();
+    window.webpackChunkremote_module_sk = [];
+    window.webpackChunkremote_module_sk.push = entry => {
+        if (entry[0].some(id => !registered.has(id))) entry[2](runtime);
+        entry[0].forEach(id => registered.add(id));
+        Array.prototype.push.call(window.webpackChunkremote_module_sk, entry);
+    };
+}
 </script>"""
 INIT = """() => {
 if (location.origin !== 'https://local-extension.invalid') return;
 window.chrome.tabs = {
     create: options => exonTestCall('create', options),
     get: id => exonTestCall('get', {id}),
-    update: (id, options) => exonTestCall('update', {id, ...options})
+    update: (id, options) => exonTestCall('update', {id, ...options}),
+    remove: id => exonTestCall('remove', {id})
 };
 window.chrome.scripting = {
     executeScript: ({target, func, args}) => exonTestCall('script', {id: target.tabId, code: func.toString(), args})
@@ -206,7 +241,7 @@ async def run(chromium, profile):
     browser = await chromium.launch_persistent_context(
         profile, headless=True, executable_path=os.getenv("CHROMIUM") or shutil.which("chromium")
     )
-    attempts, visited, errors, tabs, downloads = [], [], [], {}, asyncio.Queue()
+    attempts, visited, errors, tabs, closed, downloads = [], [], [], {}, [], asyncio.Queue()
     case = {"total": 34, "filtered": True}
     bad_action = False
 
@@ -216,7 +251,7 @@ async def run(chromium, profile):
         host = f"{uri.scheme}://{uri.netloc}"
         if host == TOOL:
             name = uri.path.strip("/")
-            if name not in {"popup.html", "popup.css", "popup.js", "vault.js", "export-page.js", "export.js", "capture.js"}:
+            if name not in {"popup.html", "popup.css", "popup.js", "vault.js", "export-page.js", "export.js", "capture.js", "remark-files.js"}:
                 return await route.abort()
             return await route.fulfill(path=ROOT / name)
         if host != ORIGIN:
@@ -249,6 +284,10 @@ async def run(chromium, profile):
         tab = tabs[call["id"]]
         if method == "get":
             return {"id": call["id"], "status": "complete", "url": tab.url}
+        if method == "remove":
+            # Keep the test page available for DOM assertions after recording the call.
+            closed.append(call["id"])
+            return None
         if method == "update":
             if "url" in call:
                 await tab.goto(call["url"])
@@ -312,7 +351,6 @@ async def run(chromium, profile):
         assert len(attempts) == 1
 
         case = {"total": 16, "filename": "document.xls"}
-        await tool.add_script_tag(url=TOOL + "/capture.js")
         captured = await tool.evaluate("""async () => {
             const saved = await ExonVault.restore();
             const settings = await ExonVault.load(saved.dir);
@@ -323,6 +361,24 @@ async def run(chromium, profile):
         assert downloads.empty()
         tab = tabs[max(tabs)]
         assert await tab.evaluate("!Object.keys(window).some(key => key.startsWith('miskhubWorkbook-'))")
+
+        case = {"total": 3, "filename": "document.xls", "catalog": True}
+        await tool.add_script_tag(url=TOOL + "/remark-files.js")
+        inventory = await tool.evaluate("""async () => {
+            const saved = await ExonVault.restore();
+            const settings = await ExonVault.load(saved.dir);
+            return ExonExport.run(ExonExport.parseLink(settings.remarksUrl), settings, () => {}, () => {},
+              new AbortController().signal, true, async (workbook, {read}) => {
+                const catalog = await ExonRemarkFiles.catalog(read, {numbers:[126,127,128], open:[126,127]}, () => {});
+                return {...catalog, blob: await read('file', catalog.files[0].id)};
+              });
+        }""")
+        assert inventory["integration"] == {"126": "605", "127": "606", "128": "607"}
+        assert inventory["files"] == [{"id": "image1", "name": "Фото.png", "numbers": [126, 127]}]
+        assert not inventory["warnings"]
+        assert base64.b64decode(inventory["blob"]["encoded"]) == b"fixture image"
+        tab = tabs[max(tabs)]
+        assert await tab.evaluate("fixtureReads") == [["batch", ["a", "b"], "test-project"], ["file", "image1"]]
 
         for total in (34, 125):
             case = {"total": total, "explicit": True, "preserve": True}
@@ -353,6 +409,7 @@ async def run(chromium, profile):
         await tool.get_by_role("button", name="Отменить", exact=True).click()
         await expect(tool.locator("#export-status")).to_have_text("Скачивание отменено.")
         assert len(attempts) == 1 and downloads.empty() and not errors, errors
+        assert sorted(closed) == list(tabs)
 
         async def vault_file(script):
             return await tool.evaluate("""async () => {
@@ -376,4 +433,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("PASS: login, XLS, individual selection in virtualized grids, pagination and export permission")
+    print("PASS: login, XLS, batched Exon attachments, request count and tab cleanup")

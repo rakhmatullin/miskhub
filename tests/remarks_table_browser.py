@@ -42,7 +42,7 @@ def run(chromium, origin, profile):
     def row(n):
         return page.locator(f'tr[data-remark="{n}"]')
 
-    expect(page.locator("body")).to_have_attribute("data-version", "2.13")
+    expect(page.locator("body")).to_have_attribute("data-version", "2.14")
     headings = page.locator("#open th")
     expect(headings).to_have_count(9)
     assert headings.all_text_contents()[1:6] == ["↓Номер", "Даты", "Описание", "Фото", "Ответственный"]
